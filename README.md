@@ -26,41 +26,49 @@ SpectraDB is a single-node embedded database that treats every write as an immut
 - **Interactive Shell** — TAB completion, persistent history, table/line/JSON output modes.
 - **Optional Native Acceleration** — C++ kernels behind `--features native` via `cxx`, with pure Rust as the default.
 
-## Use Cases
+## Who Is This For?
 
-### Audit Logging & Compliance
-Every mutation is an immutable, timestamped fact. Reconstruct the exact state of any record at any point in time — ideal for financial systems, healthcare records, and regulatory compliance where you need a provable history of changes.
+<table>
+<tr>
+<td width="50%" valign="top">
 
-```sql
--- What did this account look like at the end of Q4?
-SELECT doc FROM accounts WHERE pk='acct-001' AS OF 1735689600;
-```
+### AI & LLM Infrastructure
+Build **agent memory**, **RAG pipelines**, and **model experiment tracking** on a database that versions everything by default. Every embedding, every prompt, every model output is an immutable fact you can replay, compare, and audit across time.
 
-### Event Sourcing
-Use SpectraDB as the append-only event store backing your event-sourced architecture. The bitemporal model naturally captures both when events happened in the real world and when the system learned about them.
+</td>
+<td width="50%" valign="top">
 
-```sql
--- Replay all order events as the system knew them at deployment time
-SELECT doc FROM orders AS OF 1700000000;
-```
+### Financial Services & Compliance
+Regulations like SOX, MiFID II, and HIPAA demand provable data history. SpectraDB's append-only ledger with bitemporal queries gives auditors exactly what they need — no application-level versioning required.
 
-### Temporal Data Management
-Model entities with business-valid time ranges — employee contracts, insurance policies, price schedules — and query them naturally without maintaining complex versioning logic in your application.
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
-```sql
--- What policy was active for this customer on March 15?
-SELECT doc FROM policies WHERE pk='customer-42' VALID AT 1710460800;
-```
+### Event-Driven Architectures
+Use SpectraDB as the append-only store behind event sourcing, CQRS, or stream processing. The bitemporal model captures both when events happened and when the system learned about them.
 
-### Embedded Analytics
-Embed SpectraDB directly in your Rust application as a library. No external process, no network overhead — just a crate dependency with a SQL interface for querying structured JSON documents.
+</td>
+<td width="50%" valign="top">
 
-```rust
-let db = Database::open(path, Config::default())?;
-db.sql("CREATE TABLE metrics (pk TEXT PRIMARY KEY);")?;
-db.sql("INSERT INTO metrics (pk, doc) VALUES ('cpu', '{\"value\": 82.5}');")?;
-let result = db.sql("SELECT doc FROM metrics WHERE pk='cpu';")?;
-```
+### Embedded Systems & Edge
+Ship a full temporal database as a Rust library dependency — no server process, no network, no Docker. Ideal for IoT gateways, on-device analytics, and local-first applications.
+
+</td>
+</tr>
+</table>
+
+**SpectraDB is a good fit if you need:**
+- A complete, queryable history of every change — not just the latest state
+- Time travel queries without maintaining versioning logic in your app
+- An embedded database that deploys as a library, not a service
+- Bitemporal semantics (system time vs. business-valid time) as a first-class primitive
+
+**SpectraDB is not the right choice if you need:**
+- Distributed multi-node replication
+- Petabyte-scale OLAP workloads (consider DuckDB or ClickHouse)
+- A drop-in replacement for PostgreSQL or MySQL
 
 ## Quickstart
 
@@ -205,7 +213,9 @@ Tuning knobs: `--wal-fsync-every-n-records`, `--memtable-max-bytes`, `--sstable-
 
 ## Roadmap
 
-### v0.2 — Query Engine
+SpectraDB is evolving into an **AI-native temporal database** — purpose-built for the infrastructure layer that LLM agents, RAG pipelines, and ML systems need but today cobble together from generic stores.
+
+### v0.2 — Query Engine Foundations
 - [ ] `UPDATE` and `DELETE` with temporal-aware semantics
 - [ ] General-purpose `JOIN` beyond pk-equality
 - [ ] Richer aggregates: `SUM`, `AVG`, `MIN`, `MAX`
@@ -217,20 +227,34 @@ Tuning knobs: `--wal-fsync-every-n-records`, `--memtable-max-bytes`, `--sstable-
 - [ ] Block and index caching with configurable memory budgets
 - [ ] Prefix compression and restart points in SSTable blocks
 - [ ] Write-batch API for bulk ingest
+- [ ] SIMD-accelerated bloom probes and checksums
 
-### v0.4 — SQL Surface
-- [ ] Subqueries and CTEs
-- [ ] Window functions
+### v0.4 — AI-Native Primitives
+- [ ] **Vector storage & similarity search** — store embeddings alongside documents, query by cosine/L2 distance with temporal filters
+- [ ] **Agent memory store** — structured key-value memory for LLM agents with built-in history, context windowing, and time-travel recall
+- [ ] **Embedding versioning** — track how embeddings change across model versions; compare retrieval quality across time
+- [ ] **RAG-aware indexing** — hybrid retrieval combining semantic similarity with bitemporal recency and validity filters
+- [ ] **Model experiment tracking** — log prompts, outputs, scores, and parameters as immutable facts; diff any two runs with `AS OF`
+
+### v0.5 — SQL Surface & Developer Experience
+- [ ] Subqueries, CTEs, and window functions
 - [ ] Typed column schema with DDL enforcement
 - [ ] Index-backed query execution
-- [ ] `COPY` for import/export
+- [ ] `COPY` for bulk import/export
+- [ ] Python and Node.js bindings
 
-### v0.5 — Ecosystem
-- [ ] Additional query facets (search, vector, time-series)
-- [ ] SIMD-accelerated bloom probes and checksums
+### v0.6 — Ecosystem & Scale
+- [ ] Additional query facets (full-text search, graph, time-series)
+- [ ] Streaming change feeds for downstream consumers
 - [ ] Platform-specific async I/O paths
-- [ ] Comparative benchmark harness (vs SQLite, DuckDB workloads)
-- [ ] Language bindings (Python, Node.js)
+- [ ] Comparative benchmark harness (vs SQLite, DuckDB, LanceDB, ChromaDB)
+- [ ] MCP server for direct LLM tool-use integration
+
+### Vision
+
+Most AI infrastructure today is stateless or uses databases that weren't designed for it. Vector stores don't version embeddings. Key-value stores don't track history. And none of them let you ask *"what would my RAG pipeline have retrieved last Tuesday with last month's embeddings?"*
+
+SpectraDB is building toward a world where **every piece of AI state — embeddings, memories, experiments, retrieval results — is a temporal fact** that can be queried, compared, and audited across both system time and business time.
 
 See [design.md](design.md) for the full architecture specification.
 
