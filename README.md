@@ -26,6 +26,42 @@ SpectraDB is a single-node embedded database that treats every write as an immut
 - **Interactive Shell** — TAB completion, persistent history, table/line/JSON output modes.
 - **Optional Native Acceleration** — C++ kernels behind `--features native` via `cxx`, with pure Rust as the default.
 
+## Use Cases
+
+### Audit Logging & Compliance
+Every mutation is an immutable, timestamped fact. Reconstruct the exact state of any record at any point in time — ideal for financial systems, healthcare records, and regulatory compliance where you need a provable history of changes.
+
+```sql
+-- What did this account look like at the end of Q4?
+SELECT doc FROM accounts WHERE pk='acct-001' AS OF 1735689600;
+```
+
+### Event Sourcing
+Use SpectraDB as the append-only event store backing your event-sourced architecture. The bitemporal model naturally captures both when events happened in the real world and when the system learned about them.
+
+```sql
+-- Replay all order events as the system knew them at deployment time
+SELECT doc FROM orders AS OF 1700000000;
+```
+
+### Temporal Data Management
+Model entities with business-valid time ranges — employee contracts, insurance policies, price schedules — and query them naturally without maintaining complex versioning logic in your application.
+
+```sql
+-- What policy was active for this customer on March 15?
+SELECT doc FROM policies WHERE pk='customer-42' VALID AT 1710460800;
+```
+
+### Embedded Analytics
+Embed SpectraDB directly in your Rust application as a library. No external process, no network overhead — just a crate dependency with a SQL interface for querying structured JSON documents.
+
+```rust
+let db = Database::open(path, Config::default())?;
+db.sql("CREATE TABLE metrics (pk TEXT PRIMARY KEY);")?;
+db.sql("INSERT INTO metrics (pk, doc) VALUES ('cpu', '{\"value\": 82.5}');")?;
+let result = db.sql("SELECT doc FROM metrics WHERE pk='cpu';")?;
+```
+
 ## Quickstart
 
 ```bash
@@ -63,29 +99,89 @@ COMMIT;
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────┐
-│                  SQL Parser                  │
-│            (CREATE, INSERT, SELECT, ...)     │
-├─────────────────────────────────────────────┤
-│               Query Executor                 │
-│       (scans, joins, grouping, explain)      │
-├─────────────────────────────────────────────┤
-│            Relational Facet                   │
-│     (table/view/index metadata, schema)      │
-├──────────┬──────────┬──────────┬────────────┤
-│  Shard 0 │  Shard 1 │  Shard 2 │  Shard N   │
-│  (WAL +  │  (WAL +  │  (WAL +  │  (WAL +    │
-│ memtable │ memtable │ memtable │ memtable   │
-│ + SSTs)  │ + SSTs)  │ + SSTs)  │ + SSTs)    │
-├──────────┴──────────┴──────────┴────────────┤
-│              Storage Engine                   │
-│  WAL ─► Memtable ─► SSTable (L0) ─► Compact  │
-│  Bloom filters · Block index · mmap reads    │
-└─────────────────────────────────────────────┘
+SpectraDB is organized around three core principles: **immutable truth** (the append-only ledger), **temporal indexing** (bitemporal metadata on every fact), and **faceted queries** (pluggable query planes over the same data).
+
+```mermaid
+graph TB
+    subgraph Client Layer
+        CLI[Interactive Shell]
+        API[Rust API<br/><code>db.sql&#40;...&#41;</code>]
+    end
+
+    subgraph Query Engine
+        Parser[SQL Parser]
+        Executor[Query Executor<br/>scans · joins · aggregates]
+        Planner[Explain Planner]
+    end
+
+    subgraph Facet Layer
+        RF[Relational Facet<br/>tables · views · indexes · schema]
+        FF[Future Facets<br/>search · vector · graph · time-series]
+    end
+
+    subgraph Shard Engine
+        direction LR
+        S0[Shard 0]
+        S1[Shard 1]
+        SN[Shard N]
+    end
+
+    subgraph Storage Engine
+        WAL[Write-Ahead Log<br/>CRC-framed · fsync]
+        MT[Memtable<br/>sorted in-memory map]
+        SST[SSTables<br/>bloom · block index · mmap]
+        C[Compaction<br/>L0 merge · dedup]
+    end
+
+    MF[Manifest<br/>atomic metadata]
+
+    CLI --> Parser
+    API --> Parser
+    Parser --> Executor
+    Executor --> RF
+    Executor --> Planner
+    RF --> S0
+    RF --> S1
+    RF --> SN
+    FF -.-> S0
+    S0 --> WAL
+    S1 --> WAL
+    SN --> WAL
+    WAL --> MT
+    MT -->|flush| SST
+    SST --> C
+    S0 --> MF
+    S1 --> MF
+    SN --> MF
+
+    style FF stroke-dasharray: 5 5
 ```
 
-Each shard maintains its own WAL, memtable, and SSTable set with a single-writer execution model. Keys are hash-routed to shards for write concurrency without locking.
+### Write Path
+
+1. **Route** — Key is hashed to a shard (`hash(key) % shard_count`).
+2. **Log** — Fact is appended to the shard's WAL with a CRC frame.
+3. **Buffer** — Entry is inserted into the in-memory memtable.
+4. **Flush** — When the memtable exceeds `memtable_max_bytes`, it is frozen and written as an immutable SSTable.
+5. **Compact** — Background compaction merges L0 SSTables, deduplicates keys, and reclaims space.
+
+### Read Path
+
+1. **Bloom Check** — If the bloom filter says the key is absent, return immediately.
+2. **Memtable Scan** — Check the active memtable for the latest version.
+3. **SSTable Lookup** — Binary search the block index, then scan the target block via mmap.
+4. **Temporal Filter** — Apply `AS OF` (system time) and `VALID AT` (business time) predicates.
+5. **Merge** — Return the most recent version satisfying all filters.
+
+### Key Design Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Append-only writes | Immutability simplifies recovery, enables time travel, eliminates in-place update corruption |
+| Single writer per shard | Avoids fine-grained locking while allowing parallel writes across shards |
+| Bitemporal timestamps | Separates "when recorded" from "when true" — a requirement for audit and compliance workloads |
+| mmap reads | Lets the OS manage page caching; avoids explicit read syscalls for hot data |
+| JSON document payloads | Flexible schema without DDL migrations; structured enough for SQL projection |
 
 ## Performance
 
@@ -106,6 +202,37 @@ Sample numbers (single machine, sanity run):
 | Read p99 latency | ~1,030 µs |
 
 Tuning knobs: `--wal-fsync-every-n-records`, `--memtable-max-bytes`, `--sstable-block-bytes`, `--bloom-bits-per-key`, `--shard-count`. See [perf.md](perf.md) for details.
+
+## Roadmap
+
+### v0.2 — Query Engine
+- [ ] `UPDATE` and `DELETE` with temporal-aware semantics
+- [ ] General-purpose `JOIN` beyond pk-equality
+- [ ] Richer aggregates: `SUM`, `AVG`, `MIN`, `MAX`
+- [ ] `GROUP BY` on arbitrary expressions
+- [ ] `HAVING`, `WHERE` with comparison operators
+
+### v0.3 — Storage & Performance
+- [ ] Multi-level compaction (beyond L0 merge)
+- [ ] Block and index caching with configurable memory budgets
+- [ ] Prefix compression and restart points in SSTable blocks
+- [ ] Write-batch API for bulk ingest
+
+### v0.4 — SQL Surface
+- [ ] Subqueries and CTEs
+- [ ] Window functions
+- [ ] Typed column schema with DDL enforcement
+- [ ] Index-backed query execution
+- [ ] `COPY` for import/export
+
+### v0.5 — Ecosystem
+- [ ] Additional query facets (search, vector, time-series)
+- [ ] SIMD-accelerated bloom probes and checksums
+- [ ] Platform-specific async I/O paths
+- [ ] Comparative benchmark harness (vs SQLite, DuckDB workloads)
+- [ ] Language bindings (Python, Node.js)
+
+See [design.md](design.md) for the full architecture specification.
 
 ## Project Structure
 
