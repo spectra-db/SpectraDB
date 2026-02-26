@@ -25,6 +25,7 @@ SpectraDB is a single-node embedded database that treats every write as an immut
 - **Block & Index Caching** — LRU caches for SSTable blocks and indexes with configurable memory budgets.
 - **SQL Interface** — `CREATE TABLE` (legacy JSON or typed columns), `INSERT`, `SELECT`, `UPDATE`, `DELETE`, `JOIN` (inner/left/right/cross), `GROUP BY`, `HAVING`, subqueries, CTEs, window functions (`ROW_NUMBER`, `RANK`, `DENSE_RANK`, `LEAD`, `LAG`), views, indexes, transactions, `EXPLAIN`, `COPY`.
 - **Write Batch API** — Atomic multi-key writes with a single WAL frame for bulk ingest.
+- **Embedded AI Insight Runtime** — Optional async copilot pipeline (`--ai-auto-insights`) that runs natively in-process, consumes change feeds, synthesizes operational insights, and stores them as immutable internal facts.
 - **Streaming Change Feeds** — Subscribe to prefix-filtered change events for real-time downstream consumers.
 - **Full-Text Search** — Inverted index facet with tokenizer, stemmer, and posting list intersection.
 - **Time-Series** — Bucketed storage with range queries and downsampling (avg/min/max/sum).
@@ -101,6 +102,14 @@ cargo build -p spectradb-cli
 
 # Launch interactive shell
 cargo run -p spectradb-cli -- --path ./mydb
+
+# Launch shell with AI auto-insights enabled
+cargo run -p spectradb-cli -- --path ./mydb --ai-auto-insights
+
+# Use Tier-0 in-core AI runtime
+cargo run -p spectradb-cli -- --path ./mydb --ai-auto-insights \
+  --ai-batch-window-ms 20 \
+  --ai-batch-max-events 16
 ```
 
 ```sql
@@ -132,7 +141,7 @@ SELECT count(*), sum(doc.amount) FROM events GROUP BY doc.type HAVING count(*) >
 SELECT pk, doc, ROW_NUMBER() OVER (ORDER BY pk) AS rn FROM events;
 
 -- Joins
-SELECT e.pk, a.name FROM events e JOIN accounts a ON e.doc.user = a.name;
+SELECT pk, doc FROM events JOIN accounts ON events.pk=accounts.pk ORDER BY pk ASC;
 
 -- UPDATE and DELETE
 UPDATE events SET doc = '{"type":"refund","user":"bob"}' WHERE pk = 'evt-2';
@@ -142,7 +151,19 @@ DELETE FROM events WHERE pk = 'evt-1';
 BEGIN;
 INSERT INTO events (pk, doc) VALUES ('evt-3', '{"type":"refund","user":"bob"}');
 COMMIT;
+
+-- Shell AI ops commands
+.ai_status
+.ai table/events/evt-3 5
+.ai_timeline table/events/evt-3 20
+.ai_correlate table/events/evt-3 20
+# grab an insight_id from .ai output first
+.ai_explain <insight-id>
 ```
+
+Native AI note:
+- AI auto-insights run fully in-process in the core engine.
+- No external model server/process is required.
 
 ## Architecture
 
@@ -264,6 +285,21 @@ Sample numbers (single machine, sanity run):
 
 Tuning knobs: `--wal-fsync-every-n-records`, `--memtable-max-bytes`, `--sstable-block-bytes`, `--bloom-bits-per-key`, `--shard-count`. See [perf.md](perf.md) for details.
 
+AI overhead gate (CI/local):
+
+```bash
+./scripts/ai_overhead_gate.sh
+```
+
+Release AI overhead report:
+
+```bash
+./scripts/release_ai_report.sh
+```
+
+Executable docs note:
+- Quickstart SQL/AI examples are validated in [tests/readme_examples.rs](tests/readme_examples.rs).
+
 ## Completed Releases
 
 <details>
@@ -313,38 +349,191 @@ Tuning knobs: `--wal-fsync-every-n-records`, `--memtable-max-bytes`, `--sstable-
 
 ## Roadmap
 
-### v0.6 — Distributed Foundations
-- [ ] Write-ahead log replication (leader-follower)
-- [ ] Snapshot-based backup and restore (`BACKUP TO` / `RESTORE FROM`)
-- [ ] Point-in-time recovery from WAL replay
-- [ ] Pluggable transport layer for replication (TCP, Unix sockets)
+### v0.6 — Correctness & Storage Hardening
+**Fix critical storage bugs and wire unused subsystems into the engine.**
+- [ ] Persist per-level file metadata in manifest (fix L0-reload-on-restart bug)
+- [ ] Wire block/index caches into SSTable reader (currently allocated but unused)
+- [ ] Implement immutable memtable pipeline (freeze → queue → flush, currently dead code)
+- [ ] Fix numeric ORDER BY (currently lexicographic: "10" < "9")
+- [ ] Fix window function evaluation order (compute windows before LIMIT, not after)
+- [ ] Transaction-local reads: `SELECT` inside `BEGIN..COMMIT` sees own staged writes
+- [ ] Typed DELETE tombstone record with compaction GC (replace empty-value tombstone)
+- [ ] Wire columnar row encoding into typed table write/read path (currently stores JSON)
+- [ ] Wire io_uring backend into WAL and SSTable read paths (currently compiled but disconnected)
+- [ ] SSTable binary search correctness: fix `get_visible` index probe for internal key format
+- [ ] WAL rotation: file-per-generation with automatic archival instead of single-file truncation
+- [ ] Crash recovery fuzzing: random kill during flush/compaction with data integrity verification
 
-### v0.7 — Advanced Query Engine
-- [ ] Cost-based query optimizer with statistics
-- [ ] Parallel query execution across shards
-- [ ] Materialized views with incremental refresh
-- [ ] Prepared statements and query plan caching
-- [ ] `ORDER BY` on arbitrary expressions with external merge sort
+### v0.7 — Core AI Intelligence
+**Evolve the Tier-0 AI runtime from keyword matching to a real reasoning engine.**
+- [ ] Multi-pass enrichment graph: tokenize → classify → score → correlate → synthesize
+- [ ] Pluggable model backend trait (`ModelBackend`) with ONNX Runtime and HTTP options
+- [ ] Anomaly detection: statistical baseline per key prefix with z-score deviation alerts
+- [ ] Pattern learning: track recurring tag/risk sequences per cluster to predict incidents
+- [ ] Cross-shard correlation: join events across shards by time window and tag overlap
+- [ ] AI-driven compaction hints: prioritize compaction of hot key ranges based on access patterns
+- [ ] Adaptive batch tuning: auto-adjust `batch_window_ms` and `batch_max_events` based on event rate
+- [ ] AI query advisor: `EXPLAIN AI` suggests indexes, schema changes, query rewrites
+- [ ] Configurable risk thresholds per key prefix (e.g., `payments/` gets lower risk tolerance)
+- [ ] AI insight retention policy: TTL-based expiration of old `__ai/` facts
 
-### v0.8 — Extended Type System & Analytics
-- [ ] JSON/JSONB native column type with path indexing
-- [ ] Array and nested struct column types
-- [ ] User-defined functions (Rust plugin API)
-- [ ] Approximate aggregates: `COUNT DISTINCT` (HyperLogLog), percentiles (t-digest)
-- [ ] `EXPLAIN ANALYZE` with runtime statistics
+### v0.8 — Query Optimizer & Execution Engine
+**Replace full-table scans with a real query planner.**
+- [ ] Cost-based query optimizer with table statistics (row count, value distribution histograms)
+- [ ] Predicate pushdown: push WHERE clauses to SSTable block scan level
+- [ ] Secondary index implementation: B-tree index on arbitrary columns with automatic maintenance
+- [ ] Composite index support: multi-column indexes with prefix matching
+- [ ] Index-only scans: return results directly from index without hitting data blocks
+- [ ] Parallel query execution: fan out scan/aggregate across shards, merge results
+- [ ] Hash join and sort-merge join implementations (replace nested-loop for large tables)
+- [ ] Prepared statements with parameterized queries and plan caching
+- [ ] `EXPLAIN ANALYZE` with runtime statistics (rows scanned, blocks read, cache hits)
+- [ ] External merge sort for ORDER BY on datasets larger than memory
+- [ ] Predicate compilation: compile hot WHERE clauses to native code via cranelift
 
-### v0.9 — Production Hardening
-- [ ] Encryption at rest (AES-256-GCM per SSTable block)
-- [ ] Role-based access control for SQL operations
-- [ ] Connection pooling and multi-tenant isolation
-- [ ] Crash recovery fuzzing and Jepsen-style testing
-- [ ] Memory-mapped I/O with `O_DIRECT` bypass option
+### v0.9 — Full SQL & Analytics Surface
+**Close the gap with PostgreSQL/DuckDB for analytics workloads.**
+- [ ] Materialized views with incremental refresh on change feed
+- [ ] Common Table Expressions with recursive support (`WITH RECURSIVE`)
+- [ ] `UNION`, `INTERSECT`, `EXCEPT` set operations
+- [ ] Correlated subqueries in WHERE and SELECT
+- [ ] `CASE WHEN ... THEN ... ELSE ... END` expression
+- [ ] `CAST(expr AS type)` with type coercion rules
+- [ ] Additional scalar functions: `SUBSTR`, `TRIM`, `REPLACE`, `CONCAT`, `ROUND`, `CEIL`, `FLOOR`, `COALESCE`, `NULLIF`, `NVL`
+- [ ] Date/time functions: `NOW()`, `DATE()`, `EXTRACT()`, `DATE_TRUNC()`, `INTERVAL` arithmetic
+- [ ] Additional aggregate functions: `STDDEV`, `VARIANCE`, `FIRST`, `LAST`, `COUNT(DISTINCT ...)`
+- [ ] Approximate aggregates: HyperLogLog for `APPROX_COUNT_DISTINCT`, t-digest for percentiles
+- [ ] Additional window functions: `SUM() OVER`, `AVG() OVER`, `NTILE`, `FIRST_VALUE`, `LAST_VALUE`
+- [ ] Window function frames: `ROWS BETWEEN N PRECEDING AND M FOLLOWING`
+- [ ] JSON/JSONB native column type with `->`, `->>` operators and GIN path indexing
+- [ ] Array column type with `ANY`, `ALL`, `UNNEST` operators
+- [ ] `INSERT ... ON CONFLICT DO UPDATE` (upsert)
+- [ ] `INSERT ... RETURNING`, `UPDATE ... RETURNING`, `DELETE ... RETURNING`
+- [ ] `CREATE TABLE ... AS SELECT` (CTAS)
+- [ ] User-defined functions via Rust plugin API (`CREATE FUNCTION`)
+- [ ] Quoted identifiers and case-sensitive column names
+
+### v0.10 — FTS & Time-Series SQL Integration
+**Wire existing facets into the SQL surface for unified querying.**
+- [ ] `CREATE FTS INDEX <name> ON <table> (<columns>)` DDL
+- [ ] `MATCH(column, 'query')` function in WHERE clauses with relevance scoring
+- [ ] FTS posting list maintenance on INSERT/UPDATE/DELETE
+- [ ] BM25 relevance ranking with configurable k1/b parameters
+- [ ] Phrase search, proximity search, boolean operators (`+`, `-`, `"..."`)
+- [ ] `CREATE TIMESERIES TABLE <name> (ts TIMESTAMP, value REAL, tags MAP)` DDL
+- [ ] `SELECT bucket(ts, '1h'), avg(value) FROM metrics WHERE ts BETWEEN ... GROUP BY bucket` syntax
+- [ ] Time-series downsampling policies: automatic rollup from raw → 1m → 1h → 1d
+- [ ] Retention policies: `ALTER TABLE SET RETENTION 90d` with automatic purge
+- [ ] `SELECT ... FROM events MATCH 'search term' WHERE ts > NOW() - INTERVAL '1h'` — unified temporal + search
+
+### v0.11 — Streaming, Change Data Capture & Event Processing
+**Make SpectraDB the source of truth for event-driven architectures.**
+- [ ] Durable change feed cursors: resume from last-acknowledged position after restart
+- [ ] Exactly-once delivery semantics with consumer group coordination
+- [ ] Change feed projections: subscribe to specific columns, not full documents
+- [ ] Change feed transformations: filter/map/aggregate in-database before delivery
+- [ ] Webhook delivery: HTTP POST to external endpoints on change feed match
+- [ ] Outbox pattern: `CREATE OUTBOX ON <table> DELIVER TO <endpoint>` DDL
+- [ ] Kafka Connect sink connector for streaming to Kafka/Redpanda
+- [ ] gRPC streaming API for high-throughput change feed consumption
+- [ ] Materialized aggregates: continuously updated counters/gauges driven by change feeds
+- [ ] Temporal event joins: correlate events across tables within time windows
+
+### v0.12 — Enterprise Security & Multi-Tenancy
+**Production-grade security for regulated enterprise environments.**
+- [ ] Encryption at rest: AES-256-GCM per SSTable block with key rotation
+- [ ] Encryption in transit: TLS 1.3 for all network APIs (gRPC, wire protocol)
+- [ ] Role-based access control: `CREATE ROLE`, `GRANT`, `REVOKE` on tables/views
+- [ ] Row-level security: `CREATE POLICY ON <table> USING (tenant_id = current_tenant())`
+- [ ] Column-level encryption: `CREATE TABLE ... (ssn TEXT ENCRYPTED)` with per-column keys
+- [ ] Audit log: immutable record of all DDL and DML operations with user attribution
+- [ ] Multi-tenant isolation: logical database separation with resource quotas per tenant
+- [ ] Connection pooling with per-tenant connection limits
+- [ ] LDAP/OIDC authentication integration
+- [ ] SOC 2 / HIPAA compliance mode: enforce encryption, audit logging, key management
+
+### v0.13 — Distributed & High Availability
+**Scale beyond single-node for enterprise deployments.**
+- [ ] WAL replication: synchronous leader-follower with configurable quorum
+- [ ] Read replicas: route read-only queries to followers with bounded staleness
+- [ ] Snapshot-based backup: `BACKUP TO 's3://...'` / `RESTORE FROM '...'`
+- [ ] Point-in-time recovery: replay WAL from any backup to any timestamp
+- [ ] Automatic leader election via Raft consensus
+- [ ] Online shard rebalancing: split/merge shards without downtime
+- [ ] Cross-datacenter replication with conflict resolution policies
+- [ ] Geo-partitioning: route keys to specific regions based on prefix rules
+- [ ] Connection routing: smart proxy that routes queries to appropriate replicas
+- [ ] Cluster-wide schema DDL coordination
+
+### v0.14 — Observability & Operations
+**Enterprise-grade monitoring, debugging, and capacity planning.**
+- [ ] Prometheus metrics endpoint: write/read throughput, latency histograms, cache hit rates
+- [ ] OpenTelemetry tracing: per-query span with storage/compute breakdown
+- [ ] Slow query log with configurable threshold and EXPLAIN output
+- [ ] Live query dashboard: `SHOW PROCESSLIST`, `KILL <query_id>`
+- [ ] Storage analytics: `SHOW TABLE STATS`, SSTable count/size per level, compaction history
+- [ ] Memory usage breakdown: memtable, block cache, index cache, WAL buffers
+- [ ] Automatic vacuum: reclaim space from tombstoned temporal versions beyond retention
+- [ ] Online DDL: `ALTER TABLE` without locking writes
+- [ ] Hot config reload: change compaction thresholds, cache sizes without restart
+- [ ] Health check endpoint with readiness/liveness probes for Kubernetes
+
+### v0.15 — Language Ecosystem & Wire Protocol
+**First-class support for every major language and tool.**
+- [ ] PostgreSQL wire protocol (pgwire): connect with `psql`, any Postgres driver, BI tools
+- [ ] Python SDK: full API including `scan_prefix`, `write_batch`, `subscribe`, AI methods, async support
+- [ ] Node.js SDK: full API with native JS objects (not JSON strings), TypeScript types, async iterators
+- [ ] Go SDK via CGo or gRPC client
+- [ ] Java/JVM SDK via JNI or gRPC client
+- [ ] C/C++ SDK via FFI with stable ABI
+- [ ] REST API: HTTP/JSON interface for language-agnostic access
+- [ ] GraphQL API: schema auto-generated from table DDL
+- [ ] JDBC/ODBC drivers for BI tool integration (Tableau, Power BI, Metabase)
+- [ ] SQLAlchemy dialect for Python ORM integration
+- [ ] Prisma adapter for Node.js ORM integration
+- [ ] `spectradb-wasm`: compile core to WASM for browser and edge runtimes
+
+### v0.16 — Advanced AI & ML Integration
+**Make SpectraDB the AI-native database for enterprise ML pipelines.**
+- [ ] Vector column type with HNSW index for similarity search
+- [ ] `SELECT * FROM docs ORDER BY embedding <-> query_vector LIMIT 10` — vector search syntax
+- [ ] Hybrid search: combine FTS relevance + vector similarity + temporal recency
+- [ ] Embedding generation: auto-embed text columns via pluggable model (ONNX, OpenAI, local)
+- [ ] Feature store: versioned feature tables with point-in-time-correct joins for ML training
+- [ ] Model registry: store and version ML models as BLOB columns with metadata
+- [ ] Inference UDF: `SELECT predict(model_name, features) FROM table` — in-database inference
+- [ ] AI-powered schema migration: suggest schema changes based on query patterns and data evolution
+- [ ] RAG pipeline primitive: `SELECT rag_answer('question', corpus_table, embedding_col)` end-to-end
+- [ ] Training data export: `COPY TO 'dataset.parquet' FORMAT PARQUET` with temporal filtering for reproducible training sets
+- [ ] Drift detection: continuous monitoring of data distribution changes in feature columns
+
+### v0.17 — Performance & Scale
+**Push single-node performance to hardware limits.**
+- [ ] Vectorized query execution: process columns in batches of 1024 with SIMD
+- [ ] Column-oriented storage format: optional columnar SSTables for analytics workloads
+- [ ] Parallel compaction: concurrent compaction across levels with I/O scheduling
+- [ ] Direct I/O (`O_DIRECT`) bypass for WAL and SSTable writes on Linux
+- [ ] Memory-mapped writes with `MAP_POPULATE` for SSTable builds
+- [ ] Zero-copy reads: return references into mmap'd SSTables without allocation
+- [ ] Lock-free memtable: replace `BTreeMap` with a concurrent skip list
+- [ ] Partition pruning: skip shards that provably don't contain matching keys
+- [ ] Bloom filter hierarchy: per-level bloom filters for range queries
+- [ ] Adaptive compression: LZ4 for L0-L2 (speed), Zstd for L3+ (ratio)
+- [ ] Huge page support for large caches and memtables
+- [ ] NUMA-aware shard placement: pin shards to specific CPU/memory nodes
 
 ### v1.0 — Stable Release
-- [ ] Stable on-disk format with forward-compatibility guarantees
-- [ ] Comprehensive documentation and migration guides
-- [ ] Published crates on crates.io, PyPI, and npm
-- [ ] Long-term support policy
+**Production-ready with stability guarantees.**
+- [ ] Stable on-disk format with forward-compatibility guarantees (format version 1.0)
+- [ ] Backward-compatible WAL format with version negotiation
+- [ ] Semantic versioning with breaking change policy
+- [ ] Published crates on crates.io with API stability promise
+- [ ] Published packages on PyPI and npm
+- [ ] Comprehensive documentation site with tutorials, API reference, and migration guides
+- [ ] Jepsen-style distributed correctness testing
+- [ ] Chaos engineering suite: random kill, disk corruption, network partition
+- [ ] Long-term support (LTS) policy: 2-year security patches for each major release
+- [ ] Conformance test suite for wire protocol compatibility
 
 See [design.md](design.md) for the full architecture specification.
 
@@ -355,6 +544,7 @@ spectradb/
 ├── crates/
 │   ├── spectradb-core/        # Storage engine, SQL parser/executor, facets
 │   │   └── src/
+│   │       ├── ai/            # Tier-0 in-core AI runtime
 │   │       ├── engine/        # Database, shard runtime, change feeds
 │   │       ├── storage/       # SSTable, WAL, compaction, levels, cache, columnar
 │   │       ├── sql/           # Parser, executor, evaluator, planner
