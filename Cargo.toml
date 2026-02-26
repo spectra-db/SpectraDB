@@ -37,6 +37,7 @@ spectradb-core = { path = "crates/spectradb-core" }
 criterion = "0.5"
 tempfile = "3"
 serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 [[bench]]
 name = "basic"
