@@ -95,11 +95,10 @@ impl UringBlockReader {
         let mut buf = vec![0u8; len];
         let fd = io_uring::types::Fd(file.as_raw_fd());
 
-        let read_e =
-            io_uring::opcode::Read::new(fd, buf.as_mut_ptr(), len as u32)
-                .offset(offset)
-                .build()
-                .user_data(1);
+        let read_e = io_uring::opcode::Read::new(fd, buf.as_mut_ptr(), len as u32)
+            .offset(offset)
+            .build()
+            .user_data(1);
 
         unsafe {
             self.ring

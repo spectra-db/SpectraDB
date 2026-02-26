@@ -186,6 +186,75 @@ impl<'a> EvalContext<'a> {
                 // If we reach here, the window value should have been injected already.
                 Ok(SqlValue::Null)
             }
+            Expr::Case { operand, when_clauses, else_clause } => {
+                if let Some(op_expr) = operand {
+                    // Simple CASE: CASE expr WHEN val THEN result ...
+                    let op_val = self.eval(op_expr)?;
+                    for (when_expr, then_expr) in when_clauses {
+                        let when_val = self.eval(when_expr)?;
+                        if matches!(op_val.cmp_partial(&when_val), Some(std::cmp::Ordering::Equal)) {
+                            return self.eval(then_expr);
+                        }
+                    }
+                } else {
+                    // Searched CASE: CASE WHEN condition THEN result ...
+                    for (cond_expr, then_expr) in when_clauses {
+                        let cond_val = self.eval(cond_expr)?;
+                        if cond_val.is_truthy() {
+                            return self.eval(then_expr);
+                        }
+                    }
+                }
+                if let Some(else_expr) = else_clause {
+                    self.eval(else_expr)
+                } else {
+                    Ok(SqlValue::Null)
+                }
+            }
+            Expr::Cast { expr, target_type } => {
+                let val = self.eval(expr)?;
+                match target_type.as_str() {
+                    "INTEGER" | "INT" => {
+                        match val.to_f64() {
+                            Some(n) => Ok(SqlValue::Number((n as i64) as f64)),
+                            None => Ok(SqlValue::Null),
+                        }
+                    }
+                    "REAL" | "FLOAT" | "DOUBLE" => {
+                        match &val {
+                            SqlValue::Number(n) => Ok(SqlValue::Number(*n)),
+                            SqlValue::Text(s) => {
+                                match s.parse::<f64>() {
+                                    Ok(n) => Ok(SqlValue::Number(n)),
+                                    Err(_) => Ok(SqlValue::Null),
+                                }
+                            }
+                            SqlValue::Bool(b) => Ok(SqlValue::Number(if *b { 1.0 } else { 0.0 })),
+                            SqlValue::Null => Ok(SqlValue::Null),
+                        }
+                    }
+                    "TEXT" | "VARCHAR" | "STRING" => {
+                        match &val {
+                            SqlValue::Null => Ok(SqlValue::Null),
+                            SqlValue::Text(s) => Ok(SqlValue::Text(s.clone())),
+                            SqlValue::Number(n) => Ok(SqlValue::Text(format_number(*n))),
+                            SqlValue::Bool(b) => Ok(SqlValue::Text(b.to_string())),
+                        }
+                    }
+                    "BOOLEAN" | "BOOL" => {
+                        match &val {
+                            SqlValue::Bool(b) => Ok(SqlValue::Bool(*b)),
+                            SqlValue::Number(n) => Ok(SqlValue::Bool(*n != 0.0)),
+                            SqlValue::Text(s) => {
+                                let lower = s.to_lowercase();
+                                Ok(SqlValue::Bool(lower == "true" || lower == "1"))
+                            }
+                            SqlValue::Null => Ok(SqlValue::Null),
+                        }
+                    }
+                    _ => Err(SpectraError::SqlExec(format!("unsupported CAST target type: {target_type}"))),
+                }
+            }
         }
     }
 }
@@ -400,6 +469,14 @@ fn json_to_sql_value(v: Option<&serde_json::Value>) -> SqlValue {
     match v {
         None => SqlValue::Null,
         Some(val) => json_value_to_sql(val),
+    }
+}
+
+fn format_number(n: f64) -> String {
+    if n == (n as i64) as f64 {
+        format!("{}", n as i64)
+    } else {
+        n.to_string()
     }
 }
 

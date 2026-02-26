@@ -1,5 +1,7 @@
 # Pre-Publish Fixes Implementation Plan
 
+> Historical planning note: this document captures a point-in-time execution plan from February 25, 2026 and is kept for traceability. Current behavior and architecture are documented in `README.md`, `design.md`, `perf.md`, and `TEST_PLAN.md`.
+
 **Goal:** Fix all critical, important, and quality issues identified in the comprehensive code review before publishing on GitHub.
 
 **Architecture:** Surgical fixes to existing files. No new crates or architectural changes. Each task is a focused fix with tests.

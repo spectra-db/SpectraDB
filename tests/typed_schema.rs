@@ -44,7 +44,9 @@ fn typed_insert_select_columns() {
     db.sql("INSERT INTO products (id, name, price) VALUES ('p2', 'Gadget', 24.50)")
         .unwrap();
 
-    let result = db.sql("SELECT name, price FROM products ORDER BY name ASC").unwrap();
+    let result = db
+        .sql("SELECT name, price FROM products ORDER BY name ASC")
+        .unwrap();
     match result {
         spectradb_core::sql::exec::SqlResult::Rows(rows) => {
             assert_eq!(rows.len(), 2);

@@ -137,14 +137,8 @@ fn write_batch_mixed_with_single_puts() {
     db.write_batch(entries).unwrap();
 
     // Then another single put
-    db.put(
-        b"mix/single2",
-        b"{\"s2\":true}".to_vec(),
-        0,
-        u64::MAX,
-        None,
-    )
-    .unwrap();
+    db.put(b"mix/single2", b"{\"s2\":true}".to_vec(), 0, u64::MAX, None)
+        .unwrap();
 
     assert!(db.get(b"mix/single", None, None).unwrap().is_some());
     assert!(db.get(b"mix/batch", None, None).unwrap().is_some());

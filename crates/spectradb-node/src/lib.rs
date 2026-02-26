@@ -17,19 +17,12 @@ impl JsDatabase {
         if let Some(sc) = shard_count {
             config.shard_count = sc as usize;
         }
-        let db =
-            Database::open(&path, config).map_err(|e| Error::from_reason(e.to_string()))?;
+        let db = Database::open(&path, config).map_err(|e| Error::from_reason(e.to_string()))?;
         Ok(Self { db })
     }
 
     #[napi]
-    pub fn put(
-        &self,
-        key: Buffer,
-        doc: Buffer,
-        valid_from: i64,
-        valid_to: i64,
-    ) -> Result<i64> {
+    pub fn put(&self, key: Buffer, doc: Buffer, valid_from: i64, valid_to: i64) -> Result<i64> {
         let ts = self
             .db
             .put(

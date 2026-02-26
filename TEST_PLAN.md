@@ -16,13 +16,18 @@ A build is considered MVP-acceptable only when all of the following pass:
 
 1. `cargo test` passes on pure Rust mode.
 2. `cargo test --features native` passes on native-enabled machine.
-3. WAL fault-injection tests pass (CRC mismatch + torn tail behavior).
+3. WAL fault-injection tests pass (CRC mismatch + torn tail replay-stop behavior).
 4. Temporal stress test passes with forced flush/compaction/reopen.
-5. SQL facet integration tests pass for currently implemented statements and execution modes:
-   - `CREATE TABLE`, `CREATE VIEW`, `CREATE INDEX`, `ALTER TABLE ... ADD COLUMN`
-   - `INSERT`, point `SELECT`, temporal filters (`AS OF`, `VALID AT`), `EXPLAIN SELECT`
+5. SQL integration tests pass for supported DDL/DML/query surface:
+   - `CREATE/DROP TABLE|VIEW|INDEX`, `ALTER TABLE ... ADD COLUMN`, `SHOW TABLES`, `DESCRIBE`
+   - `INSERT`, `SELECT`, `UPDATE`, `DELETE`, `COPY`, temporal filters (`AS OF`, `VALID AT`)
+   - joins, grouping/aggregates, subqueries/CTEs, window functions, `EXPLAIN`
    - multi-statement batches and in-call transactions (`BEGIN`, `COMMIT`, `ROLLBACK`)
-6. Overnight burn-in run completes with zero invariant failures.
+6. AI core tests pass with `ai_auto_insights=true`:
+   - insights are generated and persisted
+   - AI internal writes are hidden from user change feeds
+7. Executable docs tests pass (`tests/readme_examples.rs`).
+8. Overnight burn-in run completes with zero invariant failures.
 
 ## 3) Test Layers
 
@@ -37,7 +42,7 @@ A build is considered MVP-acceptable only when all of the following pass:
 ### B) Fault Injection and Recovery
 
 - WAL torn-tail replay should stop deterministically at last valid record.
-- WAL CRC mismatch should hard-fail replay.
+- WAL CRC mismatch should stop replay at last valid frame.
 - Reopen path should restore visible state from manifest + WAL.
 - Repeated reopen cycles should preserve deterministic results.
 
@@ -71,18 +76,21 @@ A build is considered MVP-acceptable only when all of the following pass:
   - `SHOW TABLES`, `DESCRIBE <table>`.
   - `DROP TABLE` / `DROP VIEW` / `DROP INDEX` semantics and durability across reopen.
 - Scan and relational shape:
-  - `SELECT doc FROM <table>`
-  - `SELECT pk, doc FROM <table>`
-  - `SELECT COUNT(*) FROM <table>`
-  - `SELECT pk, doc FROM <left> JOIN <right> ON <left>.pk=<right>.pk`
-  - `SELECT pk, count(*) FROM ... GROUP BY pk`
+  - `SELECT` with expression predicates and temporal filters
+  - joins (`inner`, `left`, `right`, `cross`) with join predicates
+  - grouping/aggregates (`COUNT`, `SUM`, `AVG`, `MIN`, `MAX`) + `HAVING`
+  - subqueries and CTEs
+  - window functions (`ROW_NUMBER`, `RANK`, `DENSE_RANK`, `LEAD`, `LAG`)
   - `ORDER BY` + `LIMIT` determinism.
 
-Next syntax milestone tests (not yet implemented):
-- richer joins / grouping / windows / subqueries.
-- update/delete temporal semantics.
+### E) AI Runtime (Tier-0 Core)
 
-### E) Native Integration
+- Auto-insight generation is asynchronous and in-process only.
+- Insight writes are immutable internal facts (`__ai/insight/...`).
+- User change-feed subscribers never receive AI internal writes.
+- `.ai_status` counters are monotonic and internally consistent.
+
+### F) Native Integration
 
 - Rust/native deterministic output equivalence for fixture inputs.
 - Native call path instrumentation confirms invocation.
@@ -97,6 +105,9 @@ Run matrix across key knobs:
 - `sstable_block_bytes`: 4 KiB, 16 KiB, 64 KiB
 - `bloom_bits_per_key`: 8, 10, 14
 - `wal_fsync_every_n_records`: 1, 16, 128
+- `ai_auto_insights`: false, true
+- `ai_batch_window_ms`: 5, 20, 50
+- `ai_batch_max_events`: 4, 16, 64
 
 Collect per run:
 
@@ -105,7 +116,8 @@ Collect per run:
 - requested vs observed read miss ratio
 - bloom miss rate
 - mmap block reads
-- hasher path (`rust-fnv64` or `native-demo64`)
+- hasher path (`rust-fnv64-mix` or `native-demo64`)
+- AI counters (`ai_events_received`, `ai_insights_written`, `ai_write_failures`)
 
 ## 5) Baseline Comparisons
 
@@ -139,7 +151,7 @@ Required outcomes:
 
 ## 7) Regression Policy
 
-Any PR touching storage, WAL, temporal semantics, or native bridge must include:
+Any PR touching storage, WAL, temporal semantics, AI runtime, or native bridge must include:
 
 - affected test updates,
 - benchmark delta evidence (before/after),

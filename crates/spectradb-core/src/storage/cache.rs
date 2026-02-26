@@ -33,12 +33,21 @@ impl BlockCache {
     }
 
     pub fn get(&self, path_hash: u64, block_offset: u64) -> Option<Arc<Vec<u8>>> {
-        let inner = self.inner.lock();
+        let mut inner = self.inner.lock();
         let key = BlockCacheKey {
             path_hash,
             block_offset,
         };
-        inner.map.get(&key).cloned()
+        if let Some(val) = inner.map.get(&key).cloned() {
+            // Move to back for LRU
+            if let Some(pos) = inner.order.iter().position(|k| k == &key) {
+                inner.order.remove(pos);
+                inner.order.push_back(key);
+            }
+            Some(val)
+        } else {
+            None
+        }
     }
 
     pub fn insert(&self, path_hash: u64, block_offset: u64, data: Vec<u8>) {
@@ -105,7 +114,17 @@ impl IndexCache {
     }
 
     pub fn get(&self, path_hash: u64) -> Option<Arc<Vec<super::sstable::IndexEntry>>> {
-        self.inner.lock().map.get(&path_hash).cloned()
+        let mut inner = self.inner.lock();
+        if let Some(val) = inner.map.get(&path_hash).cloned() {
+            // Move to back for LRU
+            if let Some(pos) = inner.order.iter().position(|k| *k == path_hash) {
+                inner.order.remove(pos);
+                inner.order.push_back(path_hash);
+            }
+            Some(val)
+        } else {
+            None
+        }
     }
 
     pub fn insert(&self, path_hash: u64, index: Vec<super::sstable::IndexEntry>) {

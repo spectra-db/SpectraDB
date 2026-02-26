@@ -9,10 +9,21 @@ use crate::error::Result;
 pub const MANIFEST_FILE: &str = "MANIFEST.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManifestLevelFile {
+    pub file_name: String,
+    pub level: usize,
+    pub min_key: Vec<u8>,
+    pub max_key: Vec<u8>,
+    pub file_size: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManifestShardState {
     pub shard_id: usize,
     pub wal_file: String,
     pub l0_files: Vec<String>,
+    #[serde(default)]
+    pub level_files: Option<Vec<Vec<ManifestLevelFile>>>,
     pub commit_ts_high_watermark: u64,
 }
 
@@ -31,6 +42,7 @@ impl ManifestState {
                 shard_id,
                 wal_file: format!("shard-{shard_id}.wal"),
                 l0_files: Vec::new(),
+                level_files: None,
                 commit_ts_high_watermark: 0,
             });
         }

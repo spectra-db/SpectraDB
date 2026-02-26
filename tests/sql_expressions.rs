@@ -23,7 +23,10 @@ fn setup_db() -> (tempfile::TempDir, Database) {
 fn setup_test_table(db: &Database) {
     db.sql("CREATE TABLE t (pk TEXT PRIMARY KEY);").unwrap();
     db.sql("INSERT INTO t (pk, doc) VALUES ('k1', '{\"name\":\"Alice\",\"age\":30,\"balance\":100.5}');").unwrap();
-    db.sql("INSERT INTO t (pk, doc) VALUES ('k2', '{\"name\":\"Bob\",\"age\":25,\"balance\":200.0}');").unwrap();
+    db.sql(
+        "INSERT INTO t (pk, doc) VALUES ('k2', '{\"name\":\"Bob\",\"age\":25,\"balance\":200.0}');",
+    )
+    .unwrap();
     db.sql("INSERT INTO t (pk, doc) VALUES ('k3', '{\"name\":\"Charlie\",\"age\":35,\"balance\":50.0}');").unwrap();
 }
 
@@ -137,9 +140,7 @@ fn where_not_expression() {
     let (_dir, db) = setup_db();
     setup_test_table(&db);
 
-    let result = db
-        .sql("SELECT doc FROM t WHERE NOT doc.age > 30;")
-        .unwrap();
+    let result = db.sql("SELECT doc FROM t WHERE NOT doc.age > 30;").unwrap();
     match result {
         SqlResult::Rows(rows) => {
             assert_eq!(rows.len(), 2);
@@ -195,9 +196,7 @@ fn update_all_rows() {
     let (_dir, db) = setup_db();
     setup_test_table(&db);
 
-    let result = db
-        .sql("UPDATE t SET doc = '{\"reset\":true}';")
-        .unwrap();
+    let result = db.sql("UPDATE t SET doc = '{\"reset\":true}';").unwrap();
     match result {
         SqlResult::Affected { rows, .. } => assert_eq!(rows, 3),
         other => panic!("unexpected: {other:?}"),
@@ -231,9 +230,7 @@ fn delete_with_doc_field_filter() {
     let (_dir, db) = setup_db();
     setup_test_table(&db);
 
-    let result = db
-        .sql("DELETE FROM t WHERE doc.balance < 100;")
-        .unwrap();
+    let result = db.sql("DELETE FROM t WHERE doc.balance < 100;").unwrap();
     match result {
         SqlResult::Affected { rows, .. } => assert_eq!(rows, 1), // Only Charlie
         other => panic!("unexpected: {other:?}"),
@@ -271,16 +268,24 @@ fn delete_all_rows() {
 // --- JOIN tests ---
 
 fn setup_join_tables(db: &Database) {
-    db.sql("CREATE TABLE orders (pk TEXT PRIMARY KEY);").unwrap();
-    db.sql("CREATE TABLE customers (pk TEXT PRIMARY KEY);").unwrap();
+    db.sql("CREATE TABLE orders (pk TEXT PRIMARY KEY);")
+        .unwrap();
+    db.sql("CREATE TABLE customers (pk TEXT PRIMARY KEY);")
+        .unwrap();
 
-    db.sql("INSERT INTO orders (pk, doc) VALUES ('o1', '{\"customer\":\"c1\",\"amount\":100}');").unwrap();
-    db.sql("INSERT INTO orders (pk, doc) VALUES ('o2', '{\"customer\":\"c2\",\"amount\":200}');").unwrap();
-    db.sql("INSERT INTO orders (pk, doc) VALUES ('o3', '{\"customer\":\"c1\",\"amount\":50}');").unwrap();
+    db.sql("INSERT INTO orders (pk, doc) VALUES ('o1', '{\"customer\":\"c1\",\"amount\":100}');")
+        .unwrap();
+    db.sql("INSERT INTO orders (pk, doc) VALUES ('o2', '{\"customer\":\"c2\",\"amount\":200}');")
+        .unwrap();
+    db.sql("INSERT INTO orders (pk, doc) VALUES ('o3', '{\"customer\":\"c1\",\"amount\":50}');")
+        .unwrap();
 
-    db.sql("INSERT INTO customers (pk, doc) VALUES ('c1', '{\"name\":\"Alice\"}');").unwrap();
-    db.sql("INSERT INTO customers (pk, doc) VALUES ('c2', '{\"name\":\"Bob\"}');").unwrap();
-    db.sql("INSERT INTO customers (pk, doc) VALUES ('c3', '{\"name\":\"Charlie\"}');").unwrap();
+    db.sql("INSERT INTO customers (pk, doc) VALUES ('c1', '{\"name\":\"Alice\"}');")
+        .unwrap();
+    db.sql("INSERT INTO customers (pk, doc) VALUES ('c2', '{\"name\":\"Bob\"}');")
+        .unwrap();
+    db.sql("INSERT INTO customers (pk, doc) VALUES ('c3', '{\"name\":\"Charlie\"}');")
+        .unwrap();
 }
 
 #[test]
@@ -289,9 +294,12 @@ fn left_join_includes_unmatched() {
 
     db.sql("CREATE TABLE a (pk TEXT PRIMARY KEY);").unwrap();
     db.sql("CREATE TABLE b (pk TEXT PRIMARY KEY);").unwrap();
-    db.sql("INSERT INTO a (pk, doc) VALUES ('k1', '{\"v\":1}');").unwrap();
-    db.sql("INSERT INTO a (pk, doc) VALUES ('k2', '{\"v\":2}');").unwrap();
-    db.sql("INSERT INTO b (pk, doc) VALUES ('k2', '{\"v\":22}');").unwrap();
+    db.sql("INSERT INTO a (pk, doc) VALUES ('k1', '{\"v\":1}');")
+        .unwrap();
+    db.sql("INSERT INTO a (pk, doc) VALUES ('k2', '{\"v\":2}');")
+        .unwrap();
+    db.sql("INSERT INTO b (pk, doc) VALUES ('k2', '{\"v\":22}');")
+        .unwrap();
 
     let result = db
         .sql("SELECT pk, doc FROM a LEFT JOIN b ON a.pk = b.pk ORDER BY pk ASC;")
@@ -315,9 +323,12 @@ fn right_join_includes_unmatched() {
 
     db.sql("CREATE TABLE a (pk TEXT PRIMARY KEY);").unwrap();
     db.sql("CREATE TABLE b (pk TEXT PRIMARY KEY);").unwrap();
-    db.sql("INSERT INTO a (pk, doc) VALUES ('k1', '{\"v\":1}');").unwrap();
-    db.sql("INSERT INTO b (pk, doc) VALUES ('k1', '{\"v\":11}');").unwrap();
-    db.sql("INSERT INTO b (pk, doc) VALUES ('k2', '{\"v\":22}');").unwrap();
+    db.sql("INSERT INTO a (pk, doc) VALUES ('k1', '{\"v\":1}');")
+        .unwrap();
+    db.sql("INSERT INTO b (pk, doc) VALUES ('k1', '{\"v\":11}');")
+        .unwrap();
+    db.sql("INSERT INTO b (pk, doc) VALUES ('k2', '{\"v\":22}');")
+        .unwrap();
 
     let result = db
         .sql("SELECT pk, doc FROM a RIGHT JOIN b ON a.pk = b.pk ORDER BY pk ASC;")
@@ -336,14 +347,16 @@ fn cross_join() {
 
     db.sql("CREATE TABLE a (pk TEXT PRIMARY KEY);").unwrap();
     db.sql("CREATE TABLE b (pk TEXT PRIMARY KEY);").unwrap();
-    db.sql("INSERT INTO a (pk, doc) VALUES ('a1', '{\"v\":1}');").unwrap();
-    db.sql("INSERT INTO a (pk, doc) VALUES ('a2', '{\"v\":2}');").unwrap();
-    db.sql("INSERT INTO b (pk, doc) VALUES ('b1', '{\"v\":10}');").unwrap();
-    db.sql("INSERT INTO b (pk, doc) VALUES ('b2', '{\"v\":20}');").unwrap();
-
-    let result = db
-        .sql("SELECT count(*) FROM a CROSS JOIN b;")
+    db.sql("INSERT INTO a (pk, doc) VALUES ('a1', '{\"v\":1}');")
         .unwrap();
+    db.sql("INSERT INTO a (pk, doc) VALUES ('a2', '{\"v\":2}');")
+        .unwrap();
+    db.sql("INSERT INTO b (pk, doc) VALUES ('b1', '{\"v\":10}');")
+        .unwrap();
+    db.sql("INSERT INTO b (pk, doc) VALUES ('b2', '{\"v\":20}');")
+        .unwrap();
+
+    let result = db.sql("SELECT count(*) FROM a CROSS JOIN b;").unwrap();
     match result {
         SqlResult::Rows(rows) => {
             assert_eq!(rows_to_strings(rows), vec!["4"]);
@@ -360,7 +373,9 @@ fn aggregate_sum_avg_min_max() {
     setup_test_table(&db);
 
     let result = db
-        .sql("SELECT sum(doc.balance), avg(doc.balance), min(doc.balance), max(doc.balance) FROM t;")
+        .sql(
+            "SELECT sum(doc.balance), avg(doc.balance), min(doc.balance), max(doc.balance) FROM t;",
+        )
         .unwrap();
     match result {
         SqlResult::Rows(rows) => {
@@ -378,9 +393,12 @@ fn aggregate_sum_avg_min_max() {
 fn group_by_doc_field() {
     let (_dir, db) = setup_db();
     db.sql("CREATE TABLE sales (pk TEXT PRIMARY KEY);").unwrap();
-    db.sql("INSERT INTO sales (pk, doc) VALUES ('s1', '{\"region\":\"east\",\"amount\":100}');").unwrap();
-    db.sql("INSERT INTO sales (pk, doc) VALUES ('s2', '{\"region\":\"west\",\"amount\":200}');").unwrap();
-    db.sql("INSERT INTO sales (pk, doc) VALUES ('s3', '{\"region\":\"east\",\"amount\":150}');").unwrap();
+    db.sql("INSERT INTO sales (pk, doc) VALUES ('s1', '{\"region\":\"east\",\"amount\":100}');")
+        .unwrap();
+    db.sql("INSERT INTO sales (pk, doc) VALUES ('s2', '{\"region\":\"west\",\"amount\":200}');")
+        .unwrap();
+    db.sql("INSERT INTO sales (pk, doc) VALUES ('s3', '{\"region\":\"east\",\"amount\":150}');")
+        .unwrap();
 
     let result = db
         .sql("SELECT doc.region, sum(doc.amount) FROM sales GROUP BY doc.region;")
@@ -403,10 +421,14 @@ fn group_by_doc_field() {
 fn having_filters_groups() {
     let (_dir, db) = setup_db();
     db.sql("CREATE TABLE sales (pk TEXT PRIMARY KEY);").unwrap();
-    db.sql("INSERT INTO sales (pk, doc) VALUES ('s1', '{\"region\":\"east\",\"amount\":100}');").unwrap();
-    db.sql("INSERT INTO sales (pk, doc) VALUES ('s2', '{\"region\":\"west\",\"amount\":200}');").unwrap();
-    db.sql("INSERT INTO sales (pk, doc) VALUES ('s3', '{\"region\":\"east\",\"amount\":150}');").unwrap();
-    db.sql("INSERT INTO sales (pk, doc) VALUES ('s4', '{\"region\":\"east\",\"amount\":50}');").unwrap();
+    db.sql("INSERT INTO sales (pk, doc) VALUES ('s1', '{\"region\":\"east\",\"amount\":100}');")
+        .unwrap();
+    db.sql("INSERT INTO sales (pk, doc) VALUES ('s2', '{\"region\":\"west\",\"amount\":200}');")
+        .unwrap();
+    db.sql("INSERT INTO sales (pk, doc) VALUES ('s3', '{\"region\":\"east\",\"amount\":150}');")
+        .unwrap();
+    db.sql("INSERT INTO sales (pk, doc) VALUES ('s4', '{\"region\":\"east\",\"amount\":50}');")
+        .unwrap();
 
     let result = db
         .sql("SELECT doc.region, count(*) FROM sales GROUP BY doc.region HAVING count(*) > 1;")
@@ -464,7 +486,10 @@ fn temporal_where_with_expressions() {
         .sql("INSERT INTO t (pk, doc) VALUES ('k1', '{\"v\":1}');")
         .unwrap()
     {
-        SqlResult::Affected { commit_ts: Some(ts), .. } => ts,
+        SqlResult::Affected {
+            commit_ts: Some(ts),
+            ..
+        } => ts,
         other => panic!("unexpected: {other:?}"),
     };
 
@@ -472,15 +497,16 @@ fn temporal_where_with_expressions() {
         .sql("INSERT INTO t (pk, doc) VALUES ('k1', '{\"v\":2}');")
         .unwrap()
     {
-        SqlResult::Affected { commit_ts: Some(ts), .. } => ts,
+        SqlResult::Affected {
+            commit_ts: Some(ts),
+            ..
+        } => ts,
         other => panic!("unexpected: {other:?}"),
     };
 
     // Use AS OF to read old version with expression-based WHERE
     let result = db
-        .sql(&format!(
-            "SELECT doc FROM t WHERE pk = 'k1' AS OF {c1};"
-        ))
+        .sql(&format!("SELECT doc FROM t WHERE pk = 'k1' AS OF {c1};"))
         .unwrap();
     match result {
         SqlResult::Rows(rows) => {
@@ -499,21 +525,27 @@ fn comparison_operators_all() {
     setup_test_table(&db);
 
     // != (not equal)
-    let r = db.sql("SELECT count(*) FROM t WHERE doc.age != 30;").unwrap();
+    let r = db
+        .sql("SELECT count(*) FROM t WHERE doc.age != 30;")
+        .unwrap();
     match r {
         SqlResult::Rows(rows) => assert_eq!(rows_to_strings(rows), vec!["2"]),
         other => panic!("unexpected: {other:?}"),
     }
 
     // <= (less than or equal)
-    let r = db.sql("SELECT count(*) FROM t WHERE doc.age <= 30;").unwrap();
+    let r = db
+        .sql("SELECT count(*) FROM t WHERE doc.age <= 30;")
+        .unwrap();
     match r {
         SqlResult::Rows(rows) => assert_eq!(rows_to_strings(rows), vec!["2"]),
         other => panic!("unexpected: {other:?}"),
     }
 
     // >= (greater than or equal)
-    let r = db.sql("SELECT count(*) FROM t WHERE doc.age >= 30;").unwrap();
+    let r = db
+        .sql("SELECT count(*) FROM t WHERE doc.age >= 30;")
+        .unwrap();
     match r {
         SqlResult::Rows(rows) => assert_eq!(rows_to_strings(rows), vec!["2"]),
         other => panic!("unexpected: {other:?}"),

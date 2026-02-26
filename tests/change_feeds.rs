@@ -19,14 +19,8 @@ fn subscribe_receives_matching_events() {
     db.put(b"feed/key2", b"{\"v\":2}".to_vec(), 0, u64::MAX, None)
         .unwrap();
     // Write non-matching
-    db.put(
-        b"other/key3",
-        b"{\"v\":3}".to_vec(),
-        0,
-        u64::MAX,
-        None,
-    )
-    .unwrap();
+    db.put(b"other/key3", b"{\"v\":3}".to_vec(), 0, u64::MAX, None)
+        .unwrap();
 
     // Should receive 2 events (matching prefix)
     let mut events = Vec::new();
@@ -79,5 +73,8 @@ fn subscribe_no_events_when_no_match() {
         .unwrap();
 
     let evt = rx.recv_timeout(Duration::from_millis(100));
-    assert!(evt.is_err(), "should not receive event for non-matching prefix");
+    assert!(
+        evt.is_err(),
+        "should not receive event for non-matching prefix"
+    );
 }

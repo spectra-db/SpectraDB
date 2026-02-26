@@ -11,6 +11,20 @@ use crate::facet::relational::{
 use crate::sql::eval::{
     filter_rows, sql_value_to_json, AggAccumulator, EvalContext, SqlValue,
 };
+
+/// Typed comparison for ORDER BY: uses numeric ordering when both values are numbers,
+/// falls back to string comparison otherwise.
+fn compare_sort_values(a: &SqlValue, b: &SqlValue) -> std::cmp::Ordering {
+    match (a, b) {
+        (SqlValue::Null, SqlValue::Null) => std::cmp::Ordering::Equal,
+        (SqlValue::Null, _) => std::cmp::Ordering::Less,
+        (_, SqlValue::Null) => std::cmp::Ordering::Greater,
+        (SqlValue::Number(na), SqlValue::Number(nb)) => {
+            na.partial_cmp(nb).unwrap_or(std::cmp::Ordering::Equal)
+        }
+        _ => a.to_sort_string().cmp(&b.to_sort_string()),
+    }
+}
 use crate::sql::parser::{
     extract_pk_eq_literal, is_aggregate_function, parse_sql, select_items_contain_aggregate,
     select_items_contain_window, split_sql_statements, BinOperator, CopyFormat, Expr, JoinSpec,
@@ -770,8 +784,13 @@ fn execute_select(
         return execute_grouped_select(rows, &items, group_by, having, order_by, limit);
     }
 
-    // Apply ORDER BY
+    // Check for window functions BEFORE ORDER BY/LIMIT so they see all rows
     let mut rows = rows;
+    if select_items_contain_window(&items) {
+        return execute_window_select(&mut rows, &items, order_by.as_ref(), limit);
+    }
+
+    // Apply ORDER BY
     if let Some(ref orders) = order_by {
         rows.sort_by(|a, b| {
             for (expr, dir) in orders {
@@ -779,7 +798,7 @@ fn execute_select(
                 let mut ctx_b = EvalContext::new(&b.pk, &b.doc);
                 let va = ctx_a.eval(expr).unwrap_or(SqlValue::Null);
                 let vb = ctx_b.eval(expr).unwrap_or(SqlValue::Null);
-                let cmp = va.to_sort_string().cmp(&vb.to_sort_string());
+                let cmp = compare_sort_values(&va, &vb);
                 let cmp = match dir {
                     OrderDirection::Asc => cmp,
                     OrderDirection::Desc => cmp.reverse(),
@@ -796,11 +815,6 @@ fn execute_select(
     if let Some(n) = limit {
         let n = usize::try_from(n).unwrap_or(usize::MAX);
         rows.truncate(n);
-    }
-
-    // Check for window functions
-    if select_items_contain_window(&items) {
-        return execute_window_select(&rows, &items);
     }
 
     // Project results
@@ -919,7 +933,7 @@ fn execute_grouped_select(
                 let mut ctx_b = EvalContext::new(&b.0, doc_b);
                 let va = ctx_a.eval(expr).unwrap_or(SqlValue::Null);
                 let vb = ctx_b.eval(expr).unwrap_or(SqlValue::Null);
-                let cmp = va.to_sort_string().cmp(&vb.to_sort_string());
+                let cmp = compare_sort_values(&va, &vb);
                 let cmp = match dir {
                     OrderDirection::Asc => cmp,
                     OrderDirection::Desc => cmp.reverse(),
@@ -1321,7 +1335,7 @@ fn execute_join_select(
                 let mut ctx_b = EvalContext::new(&b.pk, &doc_b);
                 let va = ctx_a.eval(expr).unwrap_or(SqlValue::Null);
                 let vb = ctx_b.eval(expr).unwrap_or(SqlValue::Null);
-                let cmp = va.to_sort_string().cmp(&vb.to_sort_string());
+                let cmp = compare_sort_values(&va, &vb);
                 let cmp = match dir {
                     OrderDirection::Asc => cmp,
                     OrderDirection::Desc => cmp.reverse(),
@@ -1669,8 +1683,10 @@ fn cross_join(left_rows: Vec<VisibleRow>, right_rows: Vec<VisibleRow>) -> Vec<Jo
 }
 
 fn execute_window_select(
-    rows: &[VisibleRow],
+    rows: &mut Vec<VisibleRow>,
     items: &[SelectItem],
+    order_by: Option<&Vec<(Expr, OrderDirection)>>,
+    limit: Option<u64>,
 ) -> Result<SqlResult> {
     // For each window function in the select items, compute the values for all rows
     // Then project with the window values injected
@@ -1682,7 +1698,6 @@ fn execute_window_select(
         args: Vec<Expr>,
         partition_by: Vec<Expr>,
         order_by: Vec<(Expr, OrderDirection)>,
-        alias: Option<String>,
     }
 
     let mut window_specs = Vec::new();
@@ -1695,7 +1710,7 @@ fn execute_window_select(
                     partition_by,
                     order_by,
                 },
-            alias,
+            ..
         } = item
         {
             window_specs.push(WindowFuncSpec {
@@ -1704,12 +1719,11 @@ fn execute_window_select(
                 args: args.clone(),
                 partition_by: partition_by.clone(),
                 order_by: order_by.clone(),
-                alias: alias.clone(),
             });
         }
     }
 
-    // Compute window values: Vec<row_idx -> value> for each window function
+    // Compute window values over ALL rows (before ORDER BY/LIMIT)
     let mut window_values: HashMap<usize, Vec<SqlValue>> = HashMap::new();
 
     for spec in &window_specs {
@@ -1717,9 +1731,40 @@ fn execute_window_select(
         window_values.insert(spec.item_index, values);
     }
 
-    // Project with window values
-    let mut out = Vec::with_capacity(rows.len());
-    for (row_idx, row) in rows.iter().enumerate() {
+    // Apply ORDER BY (with original row indices preserved)
+    let mut indices: Vec<usize> = (0..rows.len()).collect();
+    if let Some(orders) = order_by {
+        indices.sort_by(|&ai, &bi| {
+            let a = &rows[ai];
+            let b = &rows[bi];
+            for (expr, dir) in orders {
+                let mut ctx_a = EvalContext::new(&a.pk, &a.doc);
+                let mut ctx_b = EvalContext::new(&b.pk, &b.doc);
+                let va = ctx_a.eval(expr).unwrap_or(SqlValue::Null);
+                let vb = ctx_b.eval(expr).unwrap_or(SqlValue::Null);
+                let cmp = compare_sort_values(&va, &vb);
+                let cmp = match dir {
+                    OrderDirection::Asc => cmp,
+                    OrderDirection::Desc => cmp.reverse(),
+                };
+                if cmp != std::cmp::Ordering::Equal {
+                    return cmp;
+                }
+            }
+            std::cmp::Ordering::Equal
+        });
+    }
+
+    // Apply LIMIT
+    if let Some(n) = limit {
+        let n = usize::try_from(n).unwrap_or(usize::MAX);
+        indices.truncate(n);
+    }
+
+    // Project with window values using the ordered/limited indices
+    let mut out = Vec::with_capacity(indices.len());
+    for &row_idx in &indices {
+        let row = &rows[row_idx];
         let mut row_json = serde_json::Map::new();
         let mut ctx = EvalContext::new(&row.pk, &row.doc);
 
@@ -1819,7 +1864,7 @@ fn compute_window_function(
                     let mut ctx_b = EvalContext::new(&rows[b].pk, &rows[b].doc);
                     let va = ctx_a.eval(&order_by[oi].0).unwrap_or(SqlValue::Null);
                     let vb = ctx_b.eval(&order_by[oi].0).unwrap_or(SqlValue::Null);
-                    let cmp = va.to_sort_string().cmp(&vb.to_sort_string());
+                    let cmp = compare_sort_values(&va, &vb);
                     let cmp = match dir {
                         OrderDirection::Asc => cmp,
                         OrderDirection::Desc => cmp.reverse(),
