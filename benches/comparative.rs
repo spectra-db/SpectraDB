@@ -78,9 +78,7 @@ fn bench_spectradb_sql_select(c: &mut Criterion) {
 
     db.sql("CREATE TABLE bench (pk TEXT PRIMARY KEY)").unwrap();
     for i in 0..100 {
-        let q = format!(
-            "INSERT INTO bench (pk, doc) VALUES ('k{i}', '{{\"val\":{i}}}')"
-        );
+        let q = format!("INSERT INTO bench (pk, doc) VALUES ('k{i}', '{{\"val\":{i}}}')");
         db.sql(&q).unwrap();
     }
 

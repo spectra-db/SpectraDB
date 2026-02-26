@@ -21,6 +21,15 @@ pub enum Expr {
         partition_by: Vec<Expr>,
         order_by: Vec<(Expr, OrderDirection)>,
     },
+    Case {
+        operand: Option<Box<Expr>>,
+        when_clauses: Vec<(Expr, Expr)>,
+        else_clause: Option<Box<Expr>>,
+    },
+    Cast {
+        expr: Box<Expr>,
+        target_type: String,
+    },
 }
 
 pub fn is_window_function(name: &str) -> bool {
@@ -1266,6 +1275,25 @@ impl Parser {
             return Ok(Expr::Null);
         }
 
+        // CASE expression
+        if self.peek_kw("CASE") {
+            return self.parse_case_expr();
+        }
+
+        // CAST(expr AS type)
+        if self.peek_kw("CAST") {
+            self.expect_kw("CAST")?;
+            self.expect_symbol('(')?;
+            let expr = self.parse_expr()?;
+            self.expect_kw("AS")?;
+            let type_name = self.expect_ident()?;
+            self.expect_symbol(')')?;
+            return Ok(Expr::Cast {
+                expr: Box::new(expr),
+                target_type: type_name.to_uppercase(),
+            });
+        }
+
         // MATCH(field, 'query') for FTS
         if self.peek_kw("MATCH") {
             self.expect_kw("MATCH")?;
@@ -1385,6 +1413,41 @@ impl Parser {
             "unexpected token in expression at position {}",
             self.i
         )))
+    }
+
+    fn parse_case_expr(&mut self) -> Result<Expr> {
+        self.expect_kw("CASE")?;
+
+        // Check for simple CASE (CASE expr WHEN ...) vs searched CASE (CASE WHEN ...)
+        let operand = if !self.peek_kw("WHEN") {
+            Some(Box::new(self.parse_expr()?))
+        } else {
+            None
+        };
+
+        let mut when_clauses = Vec::new();
+        while self.peek_kw("WHEN") {
+            self.expect_kw("WHEN")?;
+            let condition = self.parse_expr()?;
+            self.expect_kw("THEN")?;
+            let result = self.parse_expr()?;
+            when_clauses.push((condition, result));
+        }
+
+        let else_clause = if self.peek_kw("ELSE") {
+            self.expect_kw("ELSE")?;
+            Some(Box::new(self.parse_expr()?))
+        } else {
+            None
+        };
+
+        self.expect_kw("END")?;
+
+        Ok(Expr::Case {
+            operand,
+            when_clauses,
+            else_clause,
+        })
     }
 
     fn peek_comparison_op(&self) -> Option<BinOperator> {
@@ -1651,6 +1714,15 @@ fn expr_contains_window(expr: &Expr) -> bool {
             expr_contains_window(left) || expr_contains_window(right)
         }
         Expr::Not(inner) => expr_contains_window(inner),
+        Expr::Case { operand, when_clauses, else_clause } => {
+            if let Some(op) = operand { if expr_contains_window(op) { return true; } }
+            for (cond, result) in when_clauses {
+                if expr_contains_window(cond) || expr_contains_window(result) { return true; }
+            }
+            if let Some(el) = else_clause { if expr_contains_window(el) { return true; } }
+            false
+        }
+        Expr::Cast { expr, .. } => expr_contains_window(expr),
         _ => false,
     }
 }
@@ -1667,6 +1739,15 @@ fn expr_contains_aggregate(expr: &Expr) -> bool {
             expr_contains_aggregate(left) || expr_contains_aggregate(right)
         }
         Expr::Not(inner) => expr_contains_aggregate(inner),
+        Expr::Case { operand, when_clauses, else_clause } => {
+            if let Some(op) = operand { if expr_contains_aggregate(op) { return true; } }
+            for (cond, result) in when_clauses {
+                if expr_contains_aggregate(cond) || expr_contains_aggregate(result) { return true; }
+            }
+            if let Some(el) = else_clause { if expr_contains_aggregate(el) { return true; } }
+            false
+        }
+        Expr::Cast { expr, .. } => expr_contains_aggregate(expr),
         _ => false,
     }
 }

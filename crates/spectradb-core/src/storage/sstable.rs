@@ -1,6 +1,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use memmap2::Mmap;
 
@@ -245,12 +246,22 @@ impl SsTableReader {
         })
     }
 
+    pub fn path_hash(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher as StdHasher};
+        let mut h = DefaultHasher::new();
+        self.path.hash(&mut h);
+        h.finish()
+    }
+
     pub fn get_visible(
         &self,
         user_key: &[u8],
         as_of: u64,
         valid_at: Option<u64>,
         hasher: &dyn Hasher,
+        block_cache: Option<&crate::storage::cache::BlockCache>,
+        index_cache: Option<&crate::storage::cache::IndexCache>,
     ) -> Result<SsTableLookup> {
         if !self.bloom.may_contain(user_key, hasher) {
             return Ok(SsTableLookup {
@@ -277,6 +288,8 @@ impl SsTableReader {
             };
         }
 
+        let _ = index_cache; // reserved for future index caching
+
         for (i, entry) in self.index.iter().enumerate().skip(start_idx) {
             let block_start = entry.offset as usize;
             if block_start + 4 + entry.len as usize > self.mmap.len() {
@@ -292,7 +305,19 @@ impl SsTableReader {
                     "index block length mismatch".to_string(),
                 ));
             }
-            let block = &self.mmap[block_start + 4..block_start + 4 + block_len];
+            let block_data: Arc<Vec<u8>> = if let Some(cache) = block_cache {
+                let ph = self.path_hash();
+                if let Some(cached) = cache.get(ph, entry.offset) {
+                    cached
+                } else {
+                    let data = self.mmap[block_start + 4..block_start + 4 + block_len].to_vec();
+                    cache.insert(ph, entry.offset, data.clone());
+                    Arc::new(data)
+                }
+            } else {
+                Arc::new(self.mmap[block_start + 4..block_start + 4 + block_len].to_vec())
+            };
+            let block = block_data.as_slice();
             let mut idx = 0usize;
             while idx < block.len() {
                 let klen = decode_u64(block, &mut idx)? as usize;

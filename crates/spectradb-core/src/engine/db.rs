@@ -6,6 +6,10 @@ use std::time::Instant;
 use crossbeam_channel::{bounded, unbounded, Sender};
 use parking_lot::Mutex;
 
+use crate::ai::{
+    correlation_prefix_for_cluster, insight_prefix_for_source, insight_storage_key,
+    parse_insight_id, AiCorrelationRef, AiInsight, AiRuntimeHandle, AiRuntimeStats,
+};
 use crate::config::Config;
 use crate::engine::shard::{
     ChangeEvent, GetResult, PrefixScanResultRow, ShardCommand, ShardRuntime, ShardStats,
@@ -81,6 +85,7 @@ pub struct Database {
     config: Config,
     manifest: Arc<Mutex<Manifest>>,
     hasher: Arc<dyn Hasher + Send + Sync>,
+    ai_runtime: Option<AiRuntimeHandle>,
     shard_senders: Vec<Sender<ShardCommand>>,
     shard_handles: Vec<JoinHandle<()>>,
 }
@@ -135,11 +140,33 @@ impl Database {
             shard_handles.push(handle);
         }
 
+        let ai_runtime = if config.ai_auto_insights {
+            let events = {
+                let (tx, rx) = unbounded();
+                for shard_tx in &shard_senders {
+                    let _ = shard_tx.send(ShardCommand::Subscribe {
+                        prefix: Vec::new(),
+                        sender: tx.clone(),
+                    });
+                }
+                rx
+            };
+            Some(AiRuntimeHandle::spawn(
+                events,
+                shard_senders.clone(),
+                hasher.clone(),
+                config.clone(),
+            )?)
+        } else {
+            None
+        };
+
         Ok(Self {
             root,
             config,
             manifest,
             hasher,
+            ai_runtime,
             shard_senders,
             shard_handles,
         })
@@ -316,10 +343,7 @@ impl Database {
 
     /// Subscribe to change events for keys matching a prefix.
     /// Returns a receiver that will receive ChangeEvent for each write.
-    pub fn subscribe(
-        &self,
-        prefix: &[u8],
-    ) -> crossbeam_channel::Receiver<ChangeEvent> {
+    pub fn subscribe(&self, prefix: &[u8]) -> crossbeam_channel::Receiver<ChangeEvent> {
         let (tx, rx) = unbounded();
         // Fan out to all shards
         for shard_tx in &self.shard_senders {
@@ -333,6 +357,72 @@ impl Database {
 
     pub fn sql(&self, query: &str) -> Result<SqlResult> {
         execute_sql(self, query)
+    }
+
+    pub fn ai_stats(&self) -> AiRuntimeStats {
+        self.ai_runtime
+            .as_ref()
+            .map(|r| r.stats())
+            .unwrap_or_default()
+    }
+
+    pub fn ai_insights_for_key(
+        &self,
+        user_key: &[u8],
+        limit: Option<usize>,
+    ) -> Result<Vec<AiInsight>> {
+        let prefix = insight_prefix_for_source(user_key);
+        let rows = self.scan_prefix(&prefix, None, None, limit)?;
+        let mut out = Vec::new();
+        for row in rows {
+            if let Ok(insight) = serde_json::from_slice::<AiInsight>(&row.doc) {
+                out.push(insight);
+            }
+        }
+        out.sort_by(|a, b| b.source_commit_ts.cmp(&a.source_commit_ts));
+        Ok(out)
+    }
+
+    pub fn ai_insight_by_id(&self, insight_id: &str) -> Result<Option<AiInsight>> {
+        let Some((source_key, commit_ts)) = parse_insight_id(insight_id) else {
+            return Ok(None);
+        };
+        let storage_key = insight_storage_key(&source_key, commit_ts);
+        let row = self.get(&storage_key, None, None)?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let insight = serde_json::from_slice::<AiInsight>(&row).ok();
+        Ok(insight)
+    }
+
+    pub fn ai_correlation_for_cluster(
+        &self,
+        cluster_id: &str,
+        limit: Option<usize>,
+    ) -> Result<Vec<AiCorrelationRef>> {
+        let prefix = correlation_prefix_for_cluster(cluster_id);
+        let rows = self.scan_prefix(&prefix, None, None, limit)?;
+        let mut out = Vec::new();
+        for row in rows {
+            if let Ok(entry) = serde_json::from_slice::<AiCorrelationRef>(&row.doc) {
+                out.push(entry);
+            }
+        }
+        out.sort_by(|a, b| b.source_commit_ts.cmp(&a.source_commit_ts));
+        Ok(out)
+    }
+
+    pub fn ai_correlation_for_key(
+        &self,
+        user_key: &[u8],
+        limit: Option<usize>,
+    ) -> Result<Vec<AiCorrelationRef>> {
+        let latest = self.ai_insights_for_key(user_key, Some(1))?;
+        let Some(insight) = latest.first() else {
+            return Ok(Vec::new());
+        };
+        self.ai_correlation_for_cluster(&insight.cluster_id, limit)
     }
 
     pub fn stats(&self) -> Result<DbStats> {
@@ -434,6 +524,9 @@ impl Database {
 
 impl Drop for Database {
     fn drop(&mut self) {
+        if let Some(ai) = &mut self.ai_runtime {
+            ai.shutdown();
+        }
         for tx in &self.shard_senders {
             let _ = tx.send(ShardCommand::Shutdown);
         }

@@ -7,6 +7,9 @@ pub struct Config {
     pub sstable_block_bytes: usize,
     pub bloom_bits_per_key: usize,
     pub shard_count: usize,
+    pub ai_auto_insights: bool,
+    pub ai_batch_window_ms: u64,
+    pub ai_batch_max_events: usize,
     pub compaction_l0_threshold: usize,
     // Phase 2 additions
     pub compaction_l1_target_bytes: u64,
@@ -25,6 +28,9 @@ impl Default for Config {
             sstable_block_bytes: 16 * 1024,
             bloom_bits_per_key: 10,
             shard_count: 4,
+            ai_auto_insights: false,
+            ai_batch_window_ms: 20,
+            ai_batch_max_events: 16,
             compaction_l0_threshold: 8,
             compaction_l1_target_bytes: 10 * 1024 * 1024,
             compaction_size_ratio: 10,
@@ -69,6 +75,16 @@ impl Config {
         if self.compaction_max_levels < 2 {
             return Err(SpectraError::Config(
                 "compaction_max_levels must be >= 2".to_string(),
+            ));
+        }
+        if self.ai_auto_insights && self.ai_batch_window_ms == 0 {
+            return Err(SpectraError::Config(
+                "ai_batch_window_ms must be > 0".to_string(),
+            ));
+        }
+        if self.ai_auto_insights && self.ai_batch_max_events == 0 {
+            return Err(SpectraError::Config(
+                "ai_batch_max_events must be > 0".to_string(),
             ));
         }
         Ok(())

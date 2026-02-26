@@ -29,13 +29,13 @@ fn sstable_roundtrip_point_reads_and_bloom() {
     let reader = SsTableReader::open(&path).unwrap();
 
     let hit = reader
-        .get_visible(b"k0007", u64::MAX, None, hasher.as_ref())
+        .get_visible(b"k0007", u64::MAX, None, hasher.as_ref(), None, None)
         .unwrap();
     assert!(hit.value.is_some());
     assert!(hit.bloom_hit);
 
     let miss = reader
-        .get_visible(b"missing-key", u64::MAX, None, hasher.as_ref())
+        .get_visible(b"missing-key", u64::MAX, None, hasher.as_ref(), None, None)
         .unwrap();
     assert!(miss.value.is_none());
     assert!(!miss.bloom_hit);

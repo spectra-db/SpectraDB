@@ -30,7 +30,12 @@ impl PyDatabase {
     }
 
     #[pyo3(signature = (key, as_of=None, valid_at=None))]
-    fn get(&self, key: &[u8], as_of: Option<u64>, valid_at: Option<u64>) -> PyResult<Option<Vec<u8>>> {
+    fn get(
+        &self,
+        key: &[u8],
+        as_of: Option<u64>,
+        valid_at: Option<u64>,
+    ) -> PyResult<Option<Vec<u8>>> {
         self.db
             .get(key, as_of, valid_at)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))

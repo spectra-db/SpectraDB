@@ -116,8 +116,8 @@ pub struct ShardRuntime {
     commit_counter: u64,
     stats: ShardStats,
     subscribers: Vec<Subscriber>,
-    _block_cache: Arc<BlockCache>,
-    _index_cache: Arc<IndexCache>,
+    block_cache: Arc<BlockCache>,
+    index_cache: Arc<IndexCache>,
 }
 
 impl ShardRuntime {
@@ -143,22 +143,33 @@ impl ShardRuntime {
 
         let mut commit_counter = shard_state.commit_ts_high_watermark;
 
-        let mut sstables = Vec::new();
-        for file in &shard_state.l0_files {
-            let p = shard_dir.join(file);
-            if p.exists() {
-                sstables.push(SsTableReader::open(&p)?);
+        let levels = if let Some(level_info) = &shard_state.level_files {
+            LevelManager::from_manifest_levels(
+                shard_dir.clone(),
+                level_info,
+                config.compaction_max_levels,
+                config.compaction_l1_target_bytes,
+                config.compaction_size_ratio,
+                config.sstable_max_file_bytes,
+            )?
+        } else {
+            // Fallback for old manifests without level_files
+            let mut sstables = Vec::new();
+            for file in &shard_state.l0_files {
+                let p = shard_dir.join(file);
+                if p.exists() {
+                    sstables.push(SsTableReader::open(&p)?);
+                }
             }
-        }
-
-        let levels = LevelManager::from_sstables(
-            shard_dir.clone(),
-            sstables,
-            config.compaction_max_levels,
-            config.compaction_l1_target_bytes,
-            config.compaction_size_ratio,
-            config.sstable_max_file_bytes,
-        );
+            LevelManager::from_sstables(
+                shard_dir.clone(),
+                sstables,
+                config.compaction_max_levels,
+                config.compaction_l1_target_bytes,
+                config.compaction_size_ratio,
+                config.sstable_max_file_bytes,
+            )
+        };
 
         let mut memtable = Memtable::new();
         for write in Wal::replay(&wal_path)? {
@@ -185,8 +196,8 @@ impl ShardRuntime {
             commit_counter,
             stats: ShardStats::default(),
             subscribers: Vec::new(),
-            _block_cache: block_cache,
-            _index_cache: index_cache,
+            block_cache,
+            index_cache,
         })
     }
 
@@ -254,6 +265,7 @@ impl ShardRuntime {
         let commit_ts = self.commit_counter;
 
         let internal_key = encode_internal_key(user_key, commit_ts, KIND_PUT);
+        let doc_clone = doc.clone();
         let fact = FactValue {
             doc,
             valid_from,
@@ -274,7 +286,7 @@ impl ShardRuntime {
         self.stats.puts += 1;
 
         // Notify subscribers
-        self.emit_change(user_key, &write.fact, commit_ts, valid_from, valid_to);
+        self.emit_change(user_key, doc_clone, commit_ts, valid_from, valid_to);
 
         if self.memtable.approx_bytes() >= self.config.memtable_max_bytes {
             self.flush_active_memtable()?;
@@ -288,7 +300,7 @@ impl ShardRuntime {
     fn emit_change(
         &mut self,
         user_key: &[u8],
-        _fact_bytes: &[u8],
+        doc: Vec<u8>,
         commit_ts: u64,
         valid_from: u64,
         valid_to: u64,
@@ -304,7 +316,7 @@ impl ShardRuntime {
             sub.sender
                 .send(ChangeEvent {
                     user_key: user_key.to_vec(),
-                    doc: Vec::new(), // We don't decode the fact bytes here for perf
+                    doc: doc.clone(),
                     commit_ts,
                     valid_from,
                     valid_to,
@@ -381,7 +393,14 @@ impl ShardRuntime {
         let mut explain_bloom = None;
         let mut explain_block = None;
         for reader in self.levels.all_readers().iter().rev() {
-            let lookup = reader.get_visible(user_key, as_of_ts, valid_at, self.hasher.as_ref())?;
+            let lookup = reader.get_visible(
+                user_key,
+                as_of_ts,
+                valid_at,
+                self.hasher.as_ref(),
+                Some(&*self.block_cache),
+                Some(&*self.index_cache),
+            )?;
             if explain_bloom.is_none() {
                 explain_bloom = Some(lookup.bloom_hit);
                 explain_block = lookup.block_read;
@@ -519,6 +538,7 @@ impl ShardRuntime {
         {
             shard.commit_ts_high_watermark = self.commit_counter;
             shard.l0_files = self.levels.file_names();
+            shard.level_files = Some(self.levels.to_manifest_levels());
         }
         manifest.save()?;
         Ok(())
@@ -531,8 +551,12 @@ impl ShardRuntime {
         }
 
         let old = std::mem::replace(&mut self.memtable, Memtable::new());
+        // Push to immutable list so reads can still find data during flush
+        self.immutable_memtables.push(old);
+
+        let imm = self.immutable_memtables.last().unwrap();
         let mut entries: Vec<(Vec<u8>, Vec<u8>)> =
-            old.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            imm.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
 
         entries.sort_by(|a, b| a.0.cmp(&b.0));
 
@@ -552,6 +576,9 @@ impl ShardRuntime {
             self.hasher.as_ref(),
         )?;
         File::open(&self.shard_dir)?.sync_all()?;
+
+        // Remove the immutable memtable now that SSTable is built
+        self.immutable_memtables.pop();
 
         self.levels.add_l0_file(SsTableReader::open(&sst_path)?);
         self.stats.flushes += 1;

@@ -6,6 +6,7 @@
 /bench_runs/
 /overnight_runs/
 /output/
+/.local/
 
 # CLI shell history
 **/.spectradb_history

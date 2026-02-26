@@ -14,7 +14,9 @@ use rustyline::validate::{
 };
 use rustyline::{CompletionType, Config as RustylineConfig, Context, Editor, Helper};
 use spectradb_core::sql::exec::SqlResult;
-use spectradb_core::{BenchOptions, Config, Database, Result, SpectraError};
+use spectradb_core::{
+    AiCorrelationRef, AiInsight, BenchOptions, Config, Database, Result, SpectraError,
+};
 
 #[derive(Parser, Debug)]
 #[command(name = "spectradb")]
@@ -37,6 +39,15 @@ struct Cli {
 
     #[arg(long)]
     shard_count: Option<usize>,
+
+    #[arg(long, default_value_t = false)]
+    ai_auto_insights: bool,
+
+    #[arg(long, default_value_t = 20)]
+    ai_batch_window_ms: u64,
+
+    #[arg(long, default_value_t = 16)]
+    ai_batch_max_events: usize,
 
     #[command(subcommand)]
     cmd: Option<Command>,
@@ -67,6 +78,25 @@ enum Command {
         query: String,
     },
     Stats,
+    AiStatus,
+    AiInsights {
+        key: String,
+        #[arg(long, default_value_t = 10)]
+        limit: usize,
+    },
+    AiTimeline {
+        key: String,
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+    },
+    AiCorrelate {
+        key: String,
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+    },
+    AiExplain {
+        insight_id: String,
+    },
     Bench {
         #[arg(long, default_value_t = 50_000)]
         write_ops: usize,
@@ -176,6 +206,11 @@ impl ReplHelper {
                 ".tables".to_string(),
                 ".schema".to_string(),
                 ".stats".to_string(),
+                ".ai".to_string(),
+                ".ai_status".to_string(),
+                ".ai_timeline".to_string(),
+                ".ai_correlate".to_string(),
+                ".ai_explain".to_string(),
                 ".mode".to_string(),
                 ".timer".to_string(),
                 ".clear".to_string(),
@@ -289,6 +324,9 @@ fn run() -> Result<()> {
     if let Some(v) = cli.shard_count {
         cfg.shard_count = v;
     }
+    cfg.ai_auto_insights = cli.ai_auto_insights;
+    cfg.ai_batch_window_ms = cli.ai_batch_window_ms;
+    cfg.ai_batch_max_events = cli.ai_batch_max_events;
 
     match cli.cmd.unwrap_or(Command::Shell {
         history_file: None,
@@ -347,6 +385,32 @@ fn run() -> Result<()> {
             let db = Database::open(&cli.path, cfg)?;
             print_stats(&db)?;
         }
+        Command::AiStatus => {
+            let db = Database::open(&cli.path, cfg)?;
+            print_ai_status(&db);
+        }
+        Command::AiInsights { key, limit } => {
+            let db = Database::open(&cli.path, cfg)?;
+            let insights = db.ai_insights_for_key(key.as_bytes(), Some(limit))?;
+            print_ai_insights(insights, OutputMode::Table);
+        }
+        Command::AiTimeline { key, limit } => {
+            let db = Database::open(&cli.path, cfg)?;
+            let insights = db.ai_insights_for_key(key.as_bytes(), Some(limit))?;
+            print_ai_timeline(insights, OutputMode::Table);
+        }
+        Command::AiCorrelate { key, limit } => {
+            let db = Database::open(&cli.path, cfg)?;
+            let refs = db.ai_correlation_for_key(key.as_bytes(), Some(limit))?;
+            print_ai_correlations(refs, OutputMode::Table);
+        }
+        Command::AiExplain { insight_id } => {
+            let db = Database::open(&cli.path, cfg)?;
+            match db.ai_insight_by_id(&insight_id)? {
+                Some(insight) => print_ai_explain(insight, OutputMode::Line),
+                None => println!("null"),
+            }
+        }
         Command::Bench {
             write_ops,
             read_ops,
@@ -376,6 +440,11 @@ fn run() -> Result<()> {
             println!("mmap_reads={}", rep.mmap_reads);
             println!("fsync_every_n_records={}", rep.fsync_every_n_records);
             println!("hasher={}", rep.hasher_impl);
+            let ai = db.ai_stats();
+            println!("ai_enabled={}", ai.enabled);
+            println!("ai_events_received={}", ai.events_received);
+            println!("ai_insights_written={}", ai.insights_written);
+            println!("ai_write_failures={}", ai.write_failures);
         }
         Command::Shell {
             history_file,
@@ -522,6 +591,55 @@ fn handle_meta_command(
         }
         ".stats" => {
             print_stats(db)?;
+        }
+        ".ai_status" => {
+            print_ai_status(db);
+        }
+        ".ai" => {
+            if let Some(key) = parts.next() {
+                let limit = parts
+                    .next()
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .unwrap_or(10);
+                let insights = db.ai_insights_for_key(key.as_bytes(), Some(limit))?;
+                print_ai_insights(insights, *mode);
+            } else {
+                eprintln!("usage: .ai <key> [limit]");
+            }
+        }
+        ".ai_timeline" => {
+            if let Some(key) = parts.next() {
+                let limit = parts
+                    .next()
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .unwrap_or(20);
+                let insights = db.ai_insights_for_key(key.as_bytes(), Some(limit))?;
+                print_ai_timeline(insights, *mode);
+            } else {
+                eprintln!("usage: .ai_timeline <key> [limit]");
+            }
+        }
+        ".ai_correlate" => {
+            if let Some(key) = parts.next() {
+                let limit = parts
+                    .next()
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .unwrap_or(20);
+                let refs = db.ai_correlation_for_key(key.as_bytes(), Some(limit))?;
+                print_ai_correlations(refs, *mode);
+            } else {
+                eprintln!("usage: .ai_correlate <key> [limit]");
+            }
+        }
+        ".ai_explain" => {
+            if let Some(insight_id) = parts.next() {
+                match db.ai_insight_by_id(insight_id)? {
+                    Some(insight) => print_ai_explain(insight, *mode),
+                    None => println!("(insight not found)"),
+                }
+            } else {
+                eprintln!("usage: .ai_explain <insight-id>");
+            }
         }
         ".mode" => {
             if let Some(m) = parts.next() {
@@ -728,7 +846,84 @@ fn print_stats(db: &Database) -> Result<()> {
         "shards={} puts={} gets={} flushes={} compactions={} bloom_negatives={} mmap_block_reads={}",
         s.shard_count, s.puts, s.gets, s.flushes, s.compactions, s.bloom_negatives, s.mmap_block_reads
     );
+    print_ai_status(db);
     Ok(())
+}
+
+fn print_ai_status(db: &Database) {
+    let s = db.ai_stats();
+    println!(
+        "ai_enabled={} ai_events_received={} ai_insights_written={} ai_skipped_internal={} ai_skipped_empty_docs={} ai_write_failures={}",
+        s.enabled,
+        s.events_received,
+        s.insights_written,
+        s.skipped_internal_keys,
+        s.skipped_empty_docs,
+        s.write_failures
+    );
+}
+
+fn print_ai_insights(insights: Vec<AiInsight>, mode: OutputMode) {
+    if insights.is_empty() {
+        println!("(0 ai insights)");
+        return;
+    }
+    let rows = insights
+        .into_iter()
+        .filter_map(|i| serde_json::to_vec(&i).ok())
+        .collect::<Vec<_>>();
+    print_rows(rows, mode);
+}
+
+fn print_ai_timeline(insights: Vec<AiInsight>, mode: OutputMode) {
+    if insights.is_empty() {
+        println!("(0 ai timeline rows)");
+        return;
+    }
+    let rows = insights
+        .into_iter()
+        .map(|i| {
+            serde_json::json!({
+                "insight_id": i.insight_id,
+                "source_commit_ts": i.source_commit_ts,
+                "cluster_id": i.cluster_id,
+                "risk_score": i.risk_score,
+                "tags": i.tags,
+                "summary": i.summary,
+            })
+        })
+        .filter_map(|row| serde_json::to_vec(&row).ok())
+        .collect::<Vec<_>>();
+    print_rows(rows, mode);
+}
+
+fn print_ai_correlations(entries: Vec<AiCorrelationRef>, mode: OutputMode) {
+    if entries.is_empty() {
+        println!("(0 ai correlations)");
+        return;
+    }
+    let rows = entries
+        .into_iter()
+        .filter_map(|row| serde_json::to_vec(&row).ok())
+        .collect::<Vec<_>>();
+    print_rows(rows, mode);
+}
+
+fn print_ai_explain(insight: AiInsight, mode: OutputMode) {
+    let row = serde_json::json!({
+        "insight_id": insight.insight_id,
+        "cluster_id": insight.cluster_id,
+        "source_commit_ts": insight.source_commit_ts,
+        "risk_score": insight.risk_score,
+        "tags": insight.tags,
+        "summary": insight.summary,
+        "troubleshooting_hint": insight.troubleshooting_hint,
+        "matched_signals": insight.provenance.matched_signals,
+        "risk_factors": insight.provenance.risk_factors,
+        "hint_basis": insight.provenance.hint_basis,
+    });
+    let rows = serde_json::to_vec(&row).map_or_else(|_| Vec::new(), |v| vec![v]);
+    print_rows(rows, mode);
 }
 
 fn extract_completion_token(line: &str, pos: usize) -> (usize, String) {
@@ -795,6 +990,11 @@ fn print_shell_help() {
     println!("  .tables                   list tables");
     println!("  .schema <table>           describe table schema");
     println!("  .stats                    show engine stats");
+    println!("  .ai_status                show AI runtime health and counters");
+    println!("  .ai <key> [limit]         show AI insights generated for a key");
+    println!("  .ai_timeline <key> [n]    show compact AI timeline for a key");
+    println!("  .ai_correlate <key> [n]   show correlated AI insights for key cluster");
+    println!("  .ai_explain <insight-id>  explain why an insight was generated");
     println!("  .mode <table|line|json>   set output format");
     println!("  .timer [on|off]           toggle or set per-query timing");
     println!("  .clear                    clear screen");

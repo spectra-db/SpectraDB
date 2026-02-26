@@ -22,6 +22,14 @@
   - More shards = higher write concurrency potential.
   - Too many shards can amplify background work and metadata overhead.
 
+- `ai_batch_window_ms` (when `ai_auto_insights=true`)
+  - Lower = fresher insights, potentially higher write-path pressure.
+  - Higher = better batching efficiency, higher insight latency.
+
+- `ai_batch_max_events` (when `ai_auto_insights=true`)
+  - Lower = smaller batch fanout and lower burst cost.
+  - Higher = better amortization of AI synthesis and internal writes.
+
 ## 2) Expected MVP Profile
 
 Writes:
@@ -33,15 +41,19 @@ Reads:
 - point gets are bloom-filtered first,
 - mmap SSTable scans avoid explicit read syscalls for hot pages,
 - latency tail depends on compaction pressure and cache warmth.
-- current SQL executor supports point-key reads, prefix scans, pk-equality hash-join skeleton, and basic grouping skeleton (`pk,count(*) GROUP BY pk`), so scan/join cost now contributes materially to SQL latency.
+- SQL now includes joins, grouping, HAVING, CTEs/subqueries, and window functions, so operator-level scan/join/aggregate costs are primary latency contributors for analytical shapes.
 
 Temporal queries:
 - `AS OF` and `VALID AT` add version filtering cost,
 - bounded key cardinality and bloom-index pruning keep this manageable.
 
 DuckDB-category parity note:
-- Current SQL perf numbers cover point lookup plus early scan/aggregate/order subsets.
-- Missing rich relational operators (general joins/grouping/windows) still create a large gap vs DuckDB query workloads.
+- Current engine has broad relational coverage but still lacks full cost-based optimization and full parallel query execution.
+- Comparative benchmarks should be interpreted as "single-node embedded engine progress" rather than direct DuckDB parity.
+
+AI runtime note:
+- Tier-0 AI synthesis is in-process and asynchronous.
+- Write-path overhead is governed by AI batching knobs and internal write-batch fanout.
 
 ## 3) Benchmark Surface
 
@@ -53,6 +65,7 @@ CLI benchmark (`spectradb-cli bench`) reports:
 - fsync cadence
 - active hasher path (rust/native)
 - mmap block read count
+- AI runtime counters via `.ai_status` when auto-insights are enabled
 
 ### Sample run (single machine, quick sanity only)
 
@@ -78,25 +91,27 @@ Short-loop checks:
 - ingest throughput sweep by fsync cadence.
 - read latency sweep by block size and bloom bits/key.
 - native vs rust hasher delta.
+- AI overhead check: benchmark with `ai_auto_insights=false` vs `true` using identical workloads.
 
 Nightly/soak checks:
 - mixed workload burn-in with periodic reopen/recovery.
 - stable p99 regression budgets.
 - disk amplification and compaction debt tracking.
+- AI counter invariants (`ai_write_failures=0` under baseline workloads).
 
 ## 5) Prioritized Optimization Roadmap (Efficiency, Speed, Portability)
 
 1. Query-path efficiency:
-- optimize current scan operators and preserve point-read fast path while adding predictable bounded-memory costs.
-- next: grouping and joins with spill-aware execution.
+- improve operator fusion and memory behavior for join/aggregate/window heavy plans.
+- add spill-aware execution paths for large intermediates.
 
-2. Read amplification and cache locality:
-- add restart points + prefix compression in SSTable blocks.
-- introduce block/index caches with explicit hit-rate and memory budgets.
+2. AI runtime efficiency:
+- reduce per-event synthesis cost and improve batch scheduling fairness under bursty ingest.
+- add direct AI overhead benchmarks to CI (write p95/p99 deltas).
 
 3. Compaction scalability:
-- evolve from simple L0 flow to multi-level, overlap-aware compaction.
 - reduce write amplification and compaction debt under sustained ingest.
+- improve compaction scheduling under mixed OLTP + analytical scans.
 
 4. Portability-preserving acceleration:
 - keep pure-Rust path as default reference behavior.

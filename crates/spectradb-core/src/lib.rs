@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod config;
 pub mod engine;
 pub mod error;
@@ -9,6 +10,7 @@ pub mod sql;
 pub mod storage;
 pub mod util;
 
+pub use crate::ai::{AiCorrelationRef, AiInsight, AiInsightProvenance, AiRuntimeStats};
 pub use crate::config::Config;
 pub use crate::engine::db::{
     BenchOptions, BenchReport, Database, DbStats, ExplainRow, PrefixScanRow,

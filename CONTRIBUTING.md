@@ -19,6 +19,7 @@ Run tests:
 ```bash
 cargo test
 cargo test --features native
+./scripts/ai_overhead_gate.sh
 ```
 
 Run formatter:
@@ -42,3 +43,5 @@ cargo fmt --all
 3. New/updated tests cover the change.
 4. Docs updated where needed.
 5. No generated local artifacts committed (e.g. `target/`, `data/`, `bench_runs/`, `overnight_runs/`).
+6. If preparing a release, generate and attach an AI overhead report:
+   - `./scripts/release_ai_report.sh`

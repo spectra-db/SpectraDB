@@ -69,7 +69,13 @@ fn compaction_preserves_temporal_versions() {
     }
 
     let ts3 = db
-        .put(b"temporal/key", b"{\"v\":3}".to_vec(), 300, u64::MAX, Some(1))
+        .put(
+            b"temporal/key",
+            b"{\"v\":3}".to_vec(),
+            300,
+            u64::MAX,
+            Some(1),
+        )
         .unwrap();
 
     let latest = db.get(b"temporal/key", None, None).unwrap().unwrap();
@@ -119,7 +125,10 @@ fn compaction_data_survives_reopen() {
     for i in 0..100 {
         let key = format!("reopen/{i:04}");
         let val = db.get(key.as_bytes(), None, None).unwrap();
-        assert!(val.is_some(), "key {key} should survive reopen after compaction");
+        assert!(
+            val.is_some(),
+            "key {key} should survive reopen after compaction"
+        );
     }
 }
 

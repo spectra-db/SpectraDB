@@ -6,7 +6,7 @@ SpectraDB separates immutable truth from query projections:
 - Core truth: append-only bitemporal fact ledger.
 - Facets: query planes built over the same truth.
 
-MVP uses one facet (`RelationalFacet`) while preserving a layout that supports future search/vector/graph/time-series facets.
+Current builds ship relational, full-text, and time-series facets while preserving a layout that supports future vector/graph facets.
 
 ## 2) Data Model
 
@@ -48,7 +48,7 @@ valid_from <= V < valid_to
 ## 4) Storage Pipeline
 
 ```text
-WAL append -> memtable -> SSTable flush (L0) -> compaction (simple MVP)
+WAL append -> memtable -> SSTable flush (L0) -> multi-level compaction
 ```
 
 ### WAL format
@@ -65,7 +65,7 @@ Payload (`FactWrite`):
 - metadata presence flags + optional fields
 
 Recovery behavior:
-- CRC mismatch: hard error
+- CRC mismatch: deterministic stop at last valid frame
 - torn tail: deterministic stop at last valid frame
 
 ### Memtable
@@ -96,7 +96,7 @@ Footer:
 Lookup path:
 1. Bloom negative => fast not found
 2. Binary-search index for candidate block start
-3. Scan block entries (linear in MVP)
+3. Decode/scan candidate block entries and apply temporal visibility filters
 
 ### Manifest
 - Tracks per-shard WAL/SSTables and next file id.
@@ -131,45 +131,19 @@ Why this model:
 
 ### 6.1 Implemented SQL Surface
 
-- `CREATE TABLE t (pk TEXT PRIMARY KEY);`
-- `INSERT INTO t (pk, doc) VALUES ('k', '{...json...}');`
-- `SELECT doc FROM t_or_view [WHERE pk='k'] [AS OF <commit_ts>] [VALID AT <valid_ts>] [ORDER BY pk ASC|DESC] [LIMIT N];`
-- `SELECT pk, doc FROM t_or_view ...`
-- `SELECT count(*) FROM t_or_view ...`
-- `SELECT pk, doc FROM left_t JOIN right_t ON left_t.pk=right_t.pk ...` (hash-join skeleton)
-- `SELECT pk, count(*) FROM ... GROUP BY pk ...` (grouping skeleton)
-- `EXPLAIN SELECT ...` (point-read explain line)
-- `BEGIN`, `COMMIT`, `ROLLBACK`
-- multi-statement batches (`stmt1; stmt2; ...`) with semicolon-aware splitting
-- `CREATE VIEW v AS SELECT ...` (view metadata + select target indirection)
-- `CREATE INDEX idx ON t (pk)` (metadata-only)
-- `ALTER TABLE t ADD COLUMN c TEXT` (metadata-only)
-- `SHOW TABLES`
-- `DESCRIBE <table>`
-- `DROP TABLE <table>`, `DROP VIEW <view>`, `DROP INDEX <idx> ON <table>`
+- DDL: `CREATE TABLE` (legacy + typed), `CREATE VIEW`, `CREATE INDEX`, `ALTER TABLE ADD COLUMN`, `DROP TABLE/VIEW/INDEX`, `SHOW TABLES`, `DESCRIBE`.
+- DML: `INSERT`, `SELECT`, `UPDATE`, `DELETE`, transactional batches (`BEGIN/COMMIT/ROLLBACK`).
+- Query constructs: `WHERE` expressions, `ORDER BY`, `LIMIT`, subqueries, CTEs, joins (`inner/left/right/cross`), `GROUP BY`, `HAVING`, window functions (`ROW_NUMBER`, `RANK`, `DENSE_RANK`, `LEAD`, `LAG`).
+- Temporal filters: `AS OF`, `VALID AT`.
+- Bulk data path: `COPY` import/export.
+- Plan visibility: `EXPLAIN`.
 
-### 6.2 Execution Semantics and Limits
+### 6.2 Execution Semantics and Boundaries
 
-- SQL call model:
-  - `db.sql(...)` executes one batch string and returns only the final statement result.
-  - transaction state is local to that single call.
-- Transaction behavior:
-  - writes are staged after `BEGIN` and only persisted on `COMMIT`.
-  - `ROLLBACK` discards staged writes.
-  - an open transaction at end-of-call returns an error (no cross-call session transaction).
-- Query shape constraints:
-  - supported projections: `doc`, `pk, doc`, `count(*)`, `pk, count(*)`.
-  - supports full table/view scans and key-filtered reads with temporal predicates.
-  - supports `ORDER BY pk` and `LIMIT`.
-  - supports pk-equality join skeleton (`JOIN ... ON <left>.pk=<right>.pk`) via bounded hash join.
-  - supports grouping skeleton (`SELECT pk, count(*) ... GROUP BY pk`).
-  - no window functions, subqueries, CTEs, or general-purpose join/group expression support yet.
-- Metadata-only boundaries:
-  - `CREATE INDEX` persists definition metadata only; lookup planner/executor does not use it.
-  - `ALTER TABLE ... ADD COLUMN` updates schema metadata only; row payload and query operators remain `(pk, doc)`-centric.
-  - `CREATE VIEW` requires `SELECT doc ... WHERE pk='...'`; read path resolves to source table + temporal defaults, not full SQL rewrite/materialization.
-  - `DROP` statements write append-only tombstones (`DROP TABLE` also tombstones live row keys to prevent stale-row resurfacing on recreate).
-  - `EXPLAIN` currently supports point-select shape only (`SELECT doc ... WHERE pk='...'`).
+- `db.sql(...)` executes a semicolon-aware batch and returns the final statement result.
+- Transaction staging remains call-scoped: open transaction state does not persist across separate `db.sql(...)` calls.
+- Temporal correctness remains first-class for read and write paths (`AS OF`, `VALID AT`, version-preserving compaction).
+- Indexes and typed schema metadata are persisted; planner/executor coverage is expanding but not yet a full cost-based implementation.
 
 ### 6.3 Storage Mapping
 
@@ -177,35 +151,38 @@ Why this model:
 - view metadata key: `__meta/view/<view>`
 - index metadata key: `__meta/index/<table>/<index>`
 - row key: `table/<table>/<pk>`
-- row payload: JSON bytes
+- row payload: typed columnar encoding or legacy JSON payload, depending on table mode
 
-### 6.4 DuckDB Category Gap Map (Current)
+### 6.4 Gap Map (Current)
 
-- Statements:
-  - partial parity (`CREATE TABLE/VIEW/INDEX`, `ALTER TABLE ADD COLUMN`, `INSERT`, transactions, `EXPLAIN`, `DROP`)
-  - missing `UPDATE`, `DELETE`, broader DDL/DML
-- Query Syntax:
-  - partial parity via point + scan `SELECT`, `ORDER BY pk`, `LIMIT`, pk-equality join skeleton, basic group-by skeleton
-  - missing rich joins/window/subquery surface
-- Aggregates / Functions:
-  - partial (`count(*)` and `pk,count(*) GROUP BY pk` implemented; broad function/aggregate catalog missing)
-- Data Types:
-  - constrained/fixed row contract, no broad SQL type system
-- Meta Queries:
-  - partial (`SHOW TABLES`, `DESCRIBE` implemented)
-- Indexes:
-  - metadata persisted, execution support missing
-- Views:
-  - metadata-backed indirection only, no advanced view capabilities
+- Optimizer: no full cost-based optimizer yet.
+- Parallel execution: no fully parallel SQL executor yet.
+- Advanced analytics: partial catalog compared to DuckDB/Postgres ecosystems.
+- Prepared-plan lifecycle: no persistent plan cache yet.
 
-### 6.5 Near-Term SQL Syntax Targets
+### 6.5 Near-Term Query Targets
 
-- richer joins over row streams (non-pk predicates, multiple joins, and planner selection)
-- richer grouping (`GROUP BY`) and additional aggregates (`min/max/sum/avg`)
-- `UPDATE` / `DELETE` with temporal-aware semantics
-- richer catalog and typed schema enforcement
+- Cost-based planning with collected statistics.
+- Parallel shard-aware scan/join/aggregate execution.
+- Expanded analytical functions and operator-level runtime instrumentation.
 
-## 7) Native Integration (Optional)
+## 7) Tier-0 AI Runtime (In-Core)
+
+The AI runtime is embedded directly into the core engine and runs fully in-process.
+
+- Enablement: `ai_auto_insights` config flag.
+- Input: shard change-feed events.
+- Batching: micro-batched by `ai_batch_window_ms` and `ai_batch_max_events`.
+- Synthesis: native core inference/enrichment path (no external model server or subprocess).
+- Persistence: insights are written back as immutable internal facts under `__ai/insight/...`.
+- Isolation: AI internal writes are hidden from user change-feed subscribers.
+
+Operational surfaces:
+- `Database::ai_stats()`
+- `Database::ai_insights_for_key(...)`
+- CLI shell: `.ai_status`, `.ai <key> [limit]`
+
+## 8) Native Integration (Optional)
 
 Feature flag: `native`
 
@@ -217,11 +194,11 @@ Design:
   - `Compressor`
   - `BloomProbe`
 
-Current demo module:
+Current module:
 - native hasher with call-counter instrumentation,
 - deterministic equality tests vs Rust reference implementation.
 
-## 8) Invariants Checklist
+## 9) Invariants Checklist
 
 - No ACK before WAL append.
 - Shard commit timestamps are monotonic.
@@ -229,12 +206,11 @@ Current demo module:
 - SSTables are immutable once published.
 - Manifest state is atomically replaced.
 - Recovery from manifest + WAL replay reproduces visible state.
+- AI internal keys (`__ai/...`) never leak into user-facing change feeds.
 
-## 9) Facet Subscription Direction (Post-MVP)
+## 10) Facet Subscription Direction
 
-Future facets should consume fact stream from ledger append points:
+Facets consume fact streams from ledger append points:
 - append event contains key, commit_ts, valid interval, payload,
 - facet-specific indexes can be updated asynchronously,
 - core ledger remains source of truth for reconciliation and rebuilds.
-
-MVP facet directly queries core storage, but interface boundaries already support decoupled facet pipelines.

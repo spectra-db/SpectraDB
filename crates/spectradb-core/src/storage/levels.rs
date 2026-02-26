@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use crate::error::Result;
 use crate::ledger::internal_key::decode_internal_key;
 use crate::native_bridge::Hasher;
+use crate::storage::manifest::ManifestLevelFile;
 use crate::storage::sstable::{build_sstable, SsTableReader};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -85,6 +86,61 @@ impl LevelManager {
             mgr.levels[0].push(LevelFile { info, reader });
         }
         mgr
+    }
+
+    pub fn from_manifest_levels(
+        shard_dir: PathBuf,
+        level_files: &[Vec<ManifestLevelFile>],
+        max_levels: usize,
+        l1_target_bytes: u64,
+        size_ratio: u64,
+        sstable_max_bytes: u64,
+    ) -> Result<Self> {
+        let mut mgr = Self::new(
+            shard_dir.clone(),
+            max_levels,
+            l1_target_bytes,
+            size_ratio,
+            sstable_max_bytes,
+        );
+        for (level_idx, files) in level_files.iter().enumerate() {
+            if level_idx >= max_levels {
+                break;
+            }
+            for mf in files {
+                let path = shard_dir.join(&mf.file_name);
+                if path.exists() {
+                    let reader = SsTableReader::open(&path)?;
+                    let info = LevelFileInfo {
+                        file_name: mf.file_name.clone(),
+                        min_key: mf.min_key.clone(),
+                        max_key: mf.max_key.clone(),
+                        file_size: mf.file_size,
+                    };
+                    mgr.levels[level_idx].push(LevelFile { info, reader });
+                }
+            }
+        }
+        Ok(mgr)
+    }
+
+    pub fn to_manifest_levels(&self) -> Vec<Vec<ManifestLevelFile>> {
+        self.levels
+            .iter()
+            .enumerate()
+            .map(|(level_idx, level)| {
+                level
+                    .iter()
+                    .map(|f| ManifestLevelFile {
+                        file_name: f.info.file_name.clone(),
+                        level: level_idx,
+                        min_key: f.info.min_key.clone(),
+                        max_key: f.info.max_key.clone(),
+                        file_size: f.info.file_size,
+                    })
+                    .collect()
+            })
+            .collect()
     }
 
     pub fn l0_count(&self) -> usize {
@@ -229,13 +285,7 @@ impl LevelManager {
                 let file_name = format!("l{target_level}-{}.sst", *next_file_id);
                 *next_file_id += 1;
                 let sst_path = self.shard_dir.join(&file_name);
-                build_sstable(
-                    &sst_path,
-                    chunk,
-                    block_size,
-                    bloom_bits_per_key,
-                    hasher,
-                )?;
+                build_sstable(&sst_path, chunk, block_size, bloom_bits_per_key, hasher)?;
                 new_files.push(sst_path);
                 chunk_start = i + 1;
                 chunk_bytes = 0;

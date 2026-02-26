@@ -46,9 +46,7 @@ pub struct Bucket {
 
 impl Bucket {
     pub fn new() -> Self {
-        Self {
-            points: Vec::new(),
-        }
+        Self { points: Vec::new() }
     }
 
     pub fn add(&mut self, timestamp: u64, value: f64) {
