@@ -13,7 +13,9 @@ use crate::storage::bloom::BloomFilter;
 use crate::util::varint::{decode_u64, encode_u64};
 
 pub const SST_MAGIC: u32 = 0x53535442; // SSTB
-pub const SST_VERSION: u32 = 1;
+pub const SST_VERSION_V1: u32 = 1;
+pub const SST_VERSION_V2: u32 = 2; // V2: LZ4-compressed blocks
+pub const SST_VERSION: u32 = SST_VERSION_V2;
 pub const FOOTER_MAGIC: u32 = 0x53534654; // SSFT
 
 #[derive(Debug, Clone)]
@@ -74,18 +76,19 @@ pub fn build_sstable(
         entry_buf.extend_from_slice(v);
 
         if !block.is_empty() && block.len() + entry_buf.len() > block_size {
-            let block_len = block.len() as u32;
-            writer.write_all(&block_len.to_le_bytes())?;
-            writer.write_all(&block)?;
+            let compressed = lz4_flex::compress_prepend_size(&block);
+            let on_disk_len = compressed.len() as u32;
+            writer.write_all(&on_disk_len.to_le_bytes())?;
+            writer.write_all(&compressed)?;
             let last_key = block_last_key.take().ok_or_else(|| {
                 SpectraError::SstableFormat("block missing last key during flush".to_string())
             })?;
             index.push(IndexEntry {
                 last_key,
                 offset: block_offset,
-                len: block_len,
+                len: on_disk_len,
             });
-            block_offset += 4 + block_len as u64;
+            block_offset += 4 + on_disk_len as u64;
             block.clear();
         }
 
@@ -94,16 +97,17 @@ pub fn build_sstable(
     }
 
     if !block.is_empty() {
-        let block_len = block.len() as u32;
-        writer.write_all(&block_len.to_le_bytes())?;
-        writer.write_all(&block)?;
+        let compressed = lz4_flex::compress_prepend_size(&block);
+        let on_disk_len = compressed.len() as u32;
+        writer.write_all(&on_disk_len.to_le_bytes())?;
+        writer.write_all(&compressed)?;
         let last_key = block_last_key.take().ok_or_else(|| {
             SpectraError::SstableFormat("block missing last key at finalize".to_string())
         })?;
         index.push(IndexEntry {
             last_key,
             offset: block_offset,
-            len: block_len,
+            len: on_disk_len,
         });
     }
 
@@ -183,6 +187,7 @@ pub struct SsTableReader {
     pub path: PathBuf,
     mmap: Mmap,
     pub block_size: u32,
+    version: u32,
     pub index: Vec<IndexEntry>,
     pub bloom: BloomFilter,
 }
@@ -204,9 +209,9 @@ impl SsTableReader {
         }
         b.copy_from_slice(&mmap[4..8]);
         let version = u32::from_le_bytes(b);
-        if version != SST_VERSION {
+        if version != SST_VERSION_V1 && version != SST_VERSION_V2 {
             return Err(SpectraError::SstableFormat(
-                "unsupported version".to_string(),
+                format!("unsupported SSTable version: {version}"),
             ));
         }
         b.copy_from_slice(&mmap[8..12]);
@@ -241,6 +246,7 @@ impl SsTableReader {
             path,
             mmap,
             block_size,
+            version,
             index,
             bloom,
         })
@@ -297,25 +303,18 @@ impl SsTableReader {
             }
             block_read.get_or_insert(i);
 
-            let mut lb = [0u8; 4];
-            lb.copy_from_slice(&self.mmap[block_start..block_start + 4]);
-            let block_len = u32::from_le_bytes(lb) as usize;
-            if block_len != entry.len as usize {
-                return Err(SpectraError::SstableFormat(
-                    "index block length mismatch".to_string(),
-                ));
-            }
+            let block_len = entry.len as usize;
             let block_data: Arc<Vec<u8>> = if let Some(cache) = block_cache {
                 let ph = self.path_hash();
                 if let Some(cached) = cache.get(ph, entry.offset) {
                     cached
                 } else {
-                    let data = self.mmap[block_start + 4..block_start + 4 + block_len].to_vec();
+                    let data = self.read_block_data(block_start, block_len)?;
                     cache.insert(ph, entry.offset, data.clone());
                     Arc::new(data)
                 }
             } else {
-                Arc::new(self.mmap[block_start + 4..block_start + 4 + block_len].to_vec())
+                Arc::new(self.read_block_data(block_start, block_len)?)
             };
             let block = block_data.as_slice();
             let mut idx = 0usize;
@@ -373,19 +372,29 @@ impl SsTableReader {
         })
     }
 
+    fn read_block_data(&self, block_start: usize, block_len: usize) -> Result<Vec<u8>> {
+        let raw = &self.mmap[block_start + 4..block_start + 4 + block_len];
+        if self.version == SST_VERSION_V2 {
+            lz4_flex::decompress_size_prepended(raw).map_err(|e| {
+                SpectraError::SstableFormat(format!("LZ4 decompress error: {e}"))
+            })
+        } else {
+            Ok(raw.to_vec())
+        }
+    }
+
     pub fn iter_all_entries(&self) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
         let mut out = Vec::new();
         for entry in &self.index {
             let block_start = entry.offset as usize;
-            if block_start + 4 + entry.len as usize > self.mmap.len() {
+            let block_len = entry.len as usize;
+            if block_start + 4 + block_len > self.mmap.len() {
                 return Err(SpectraError::SstableFormat(
                     "index offset out of range".to_string(),
                 ));
             }
-            let mut lb = [0u8; 4];
-            lb.copy_from_slice(&self.mmap[block_start..block_start + 4]);
-            let block_len = u32::from_le_bytes(lb) as usize;
-            let block = &self.mmap[block_start + 4..block_start + 4 + block_len];
+            let block_data = self.read_block_data(block_start, block_len)?;
+            let block = block_data.as_slice();
             let mut idx = 0usize;
             while idx < block.len() {
                 let klen = decode_u64(block, &mut idx)? as usize;
