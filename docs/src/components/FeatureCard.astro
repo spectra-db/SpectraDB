@@ -7,10 +7,12 @@ interface Props {
 }
 
 const { icon, title, description, href } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const resolvedHref = href && href.startsWith('/') ? `${base}${href}` : href;
 const Tag = href ? 'a' : 'div';
 ---
 
-<Tag class="feature-card" href={href}>
+<Tag class="feature-card" href={resolvedHref}>
   <div class="feature-card-icon">{icon}</div>
   <h3 class="feature-card-title">{title}</h3>
   <p class="feature-card-description">{description}</p>

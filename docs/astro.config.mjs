@@ -1,8 +1,14 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
+// Stub sitemap integration to prevent Starlight from auto-adding the broken one
+const noSitemap = { name: '@astrojs/sitemap', hooks: {} };
+
 export default defineConfig({
+  site: 'https://spectra-db.github.io',
+  base: '/SpectraDB',
   integrations: [
+    noSitemap,
     starlight({
       title: 'SpectraDB',
       description: 'Documentation for SpectraDB — the AI-native bitemporal ledger database',
