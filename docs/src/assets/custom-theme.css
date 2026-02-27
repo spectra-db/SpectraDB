@@ -1,38 +1,31 @@
 /* =============================================================================
    SpectraDB Documentation — Custom Theme
-   Dark-first design with full light mode support.
+   Clean, professional design. Dark-first with light mode support.
    ============================================================================= */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* ---------------------------------------------------------------------------
-   Core tokens (theme-agnostic)
+   Core tokens
    --------------------------------------------------------------------------- */
 :root {
   --sl-font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --sl-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   --sl-content-width: 55rem;
 
-  /* Brand palette — same in both themes */
+  /* Brand */
   --spectra-gradient: linear-gradient(135deg, #3B82F6, #8B5CF6);
   --spectra-blue: #3B82F6;
   --spectra-violet: #8B5CF6;
   --spectra-emerald: #10B981;
   --spectra-amber: #F59E0B;
-}
 
-/* ---------------------------------------------------------------------------
-   Dark theme (default)
-   --------------------------------------------------------------------------- */
-:root {
-  /* Starlight accent overrides */
+  /* Starlight accent */
   --sl-color-accent-low: #1e1b4b;
   --sl-color-accent: #3B82F6;
   --sl-color-accent-high: #93c5fd;
 
-  /* Gray scale — CONTRAST-SAFE on dark backgrounds
-     gray-3 on #0f172a = ~10:1   (was ~4.6:1)
-     gray-4 on #0f172a = ~5.5:1  (was ~2.7:1)  */
+  /* Gray scale — high contrast on dark */
   --sl-color-white: #ffffff;
   --sl-color-gray-1: #f1f5f9;
   --sl-color-gray-2: #e2e8f0;
@@ -45,9 +38,9 @@
   /* Semantic surface tokens */
   --spectra-dark: #0F172A;
   --spectra-surface: #1E293B;
-  --spectra-card-bg: rgba(255, 255, 255, 0.07);
-  --spectra-card-border: rgba(255, 255, 255, 0.15);
-  --spectra-glow: 0 0 20px rgba(59, 130, 246, 0.3);
+  --spectra-card-bg: rgba(255, 255, 255, 0.06);
+  --spectra-card-border: rgba(255, 255, 255, 0.12);
+  --spectra-glow: 0 0 20px rgba(59, 130, 246, 0.25);
   --spectra-text: #e2e8f0;
   --spectra-text-muted: #cbd5e1;
   --spectra-text-faint: #94a3b8;
@@ -58,236 +51,117 @@
    --------------------------------------------------------------------------- */
 :root[data-theme='light'] {
   --spectra-dark: #ffffff;
-  --spectra-surface: #f1f5f9;
-  --spectra-card-bg: rgba(15, 23, 42, 0.04);
-  --spectra-card-border: rgba(15, 23, 42, 0.12);
-  --spectra-glow: 0 0 20px rgba(59, 130, 246, 0.15);
+  --spectra-surface: #f8fafc;
+  --spectra-card-bg: rgba(15, 23, 42, 0.03);
+  --spectra-card-border: rgba(15, 23, 42, 0.1);
+  --spectra-glow: 0 0 20px rgba(59, 130, 246, 0.12);
   --spectra-text: #1e293b;
   --spectra-text-muted: #475569;
   --spectra-text-faint: #64748b;
 }
 
 /* ---------------------------------------------------------------------------
-   Hero Section
+   Hide Starlight's default hero on splash pages (we render our own)
    --------------------------------------------------------------------------- */
-.hero-section {
-  min-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 4rem 2rem;
-  position: relative;
+[data-page-title] {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
   overflow: hidden;
-  background: linear-gradient(135deg, #0F172A, #1e1b4b, #172554, #0F172A);
-  background-size: 400% 400%;
-  animation: hero-gradient 8s ease infinite;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 }
 
-:root[data-theme='light'] .hero-section {
-  background: linear-gradient(135deg, #eff6ff, #e0e7ff, #dbeafe, #eff6ff);
-  background-size: 400% 400%;
-  animation: hero-gradient 8s ease infinite;
-}
-
-@keyframes hero-gradient {
-  0% { background-position: 0% 50%; }
-  25% { background-position: 100% 50%; }
-  50% { background-position: 100% 0%; }
-  75% { background-position: 0% 100%; }
-  100% { background-position: 0% 50%; }
-}
-
-.hero-tagline {
-  font-size: clamp(2rem, 5vw, 3.5rem);
-  font-weight: 700;
-  line-height: 1.15;
-  margin-bottom: 1.5rem;
-  background: var(--spectra-gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.hero-stats {
-  display: flex;
-  gap: 3rem;
-  margin: 2.5rem 0;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.hero-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.hero-stat-number {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: var(--sl-color-white);
-  line-height: 1.1;
-}
-
-:root[data-theme='light'] .hero-stat-number {
-  color: #0f172a;
-}
-
-.hero-stat-label {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--spectra-text-muted);
-  margin-top: 0.25rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.hero-cta {
-  display: flex;
-  gap: 1rem;
-  margin-top: 2rem;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.hero-cta a {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.8rem 1.8rem;
-  border-radius: 10px;
-  font-weight: 700;
-  font-size: 1rem;
-  text-decoration: none;
-  color: #ffffff;
-  background: var(--spectra-gradient);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);
-}
-
-.hero-cta a:hover {
-  transform: scale(1.05);
-  box-shadow: 0 6px 24px rgba(59, 130, 246, 0.45);
-}
-
-.hero-cta a.secondary {
-  background: var(--spectra-card-bg);
-  border: 2px solid var(--spectra-card-border);
-  color: var(--spectra-text);
-  box-shadow: none;
-}
-
-.hero-cta a.secondary:hover {
-  border-color: var(--spectra-blue);
-  box-shadow: var(--spectra-glow);
+.hero {
+  display: none !important;
 }
 
 /* ---------------------------------------------------------------------------
-   Glassmorphism Feature Cards
+   Homepage sections — consistent spacing, no ugly <hr>
    --------------------------------------------------------------------------- */
+.home-section {
+  padding: 3rem 0;
+}
+
+.home-section + .home-section {
+  border-top: 1px solid var(--spectra-card-border);
+}
+
+/* Hide markdown <hr> on splash pages */
+.sl-markdown-content hr {
+  display: none;
+}
+
+/* Feature grid */
 .feature-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
-  margin: 2rem 0;
-}
-
-.feature-card {
-  background: var(--spectra-card-bg);
-  border: 1px solid var(--spectra-card-border);
-  border-radius: 16px;
-  padding: 2rem;
-  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
-}
-
-.feature-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 32px rgba(59, 130, 246, 0.2);
-  border-color: rgba(59, 130, 246, 0.3);
-}
-
-.feature-card-icon {
-  width: 48px;
-  height: 48px;
-  background: var(--spectra-gradient);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  margin-bottom: 1rem;
-  color: #ffffff;
-}
-
-.feature-card h3 {
-  font-size: 1.15rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-  color: var(--spectra-text);
-}
-
-.feature-card p {
-  font-size: 0.9rem;
-  line-height: 1.6;
-  color: var(--spectra-text-muted);
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0 0;
 }
 
 /* ---------------------------------------------------------------------------
-   Code Tabs
+   Homepage CTA footer
    --------------------------------------------------------------------------- */
-.code-tabs {
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--spectra-surface);
-  border: 1px solid var(--spectra-card-border);
-  margin: 1.5rem 0;
+.home-cta {
+  text-align: center;
 }
 
-.code-tabs-header {
+.home-cta pre {
+  max-width: 360px;
+  margin: 1rem auto !important;
+}
+
+.cta-links {
   display: flex;
-  background: var(--spectra-dark);
-  border-bottom: 1px solid var(--spectra-card-border);
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 1.5rem;
 }
 
-.code-tab-button {
-  padding: 0.75rem 1.25rem;
-  border: none;
-  background: transparent;
-  color: var(--spectra-text-faint);
-  font-family: var(--sl-font);
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: color 0.2s ease, border-color 0.2s ease;
+.cta-primary {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.65rem 1.4rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
+  background: var(--spectra-gradient);
+  color: #ffffff !important;
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.code-tab-button:hover {
-  color: var(--spectra-text);
+.cta-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
 }
 
-.code-tab-button.active {
-  color: var(--sl-color-white);
-  border-bottom: 2px solid var(--spectra-blue);
+.cta-secondary {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.65rem 1.4rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
+  border: 1px solid var(--spectra-card-border);
+  color: var(--spectra-text) !important;
+  transition: border-color 0.2s;
 }
 
-.code-tab-content {
-  padding: 0;
-}
-
-.code-tab-content pre {
-  margin: 0;
-  border-radius: 0;
+.cta-secondary:hover {
+  border-color: var(--spectra-blue);
 }
 
 /* ---------------------------------------------------------------------------
    Performance Chart
    --------------------------------------------------------------------------- */
 .perf-chart {
-  max-width: 700px;
-  margin: 2rem auto;
+  max-width: 640px;
+  margin: 1.5rem auto;
 }
 
 .perf-bar-group {
@@ -297,13 +171,13 @@
 .perf-bar-label {
   font-weight: 600;
   margin-bottom: 0.5rem;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   color: var(--spectra-text);
 }
 
 .perf-bar {
-  height: 32px;
-  border-radius: 8px;
+  height: 28px;
+  border-radius: 6px;
   position: relative;
   background: var(--spectra-card-bg);
   overflow: hidden;
@@ -311,7 +185,7 @@
 
 .perf-bar-fill {
   height: 100%;
-  border-radius: 8px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -331,7 +205,7 @@
 .perf-bar-fill.redb { background: #10b981; }
 
 .perf-bar-value {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: #ffffff;
   white-space: nowrap;
@@ -341,7 +215,7 @@
    SQL Playground
    --------------------------------------------------------------------------- */
 .sql-playground {
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid var(--spectra-card-border);
   overflow: hidden;
   background: var(--spectra-dark);
@@ -349,7 +223,7 @@
 }
 
 .sql-playground-header {
-  padding: 1rem 1.5rem;
+  padding: 0.75rem 1.25rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -357,40 +231,34 @@
   border-bottom: 1px solid var(--spectra-card-border);
 }
 
+/* Custom styled select */
 .sql-playground-header select {
+  appearance: none;
+  -webkit-appearance: none;
   background: var(--spectra-dark);
   color: var(--spectra-text);
   border: 1px solid var(--spectra-card-border);
   border-radius: 6px;
-  padding: 0.4rem 0.8rem;
+  padding: 0.4rem 2rem 0.4rem 0.8rem;
   font-family: var(--sl-font);
-  font-size: 0.85rem;
-}
-
-.sql-run-btn {
-  background: var(--spectra-gradient);
-  border: none;
-  color: #ffffff;
-  padding: 0.5rem 1.2rem;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   cursor: pointer;
-  transition: box-shadow 0.2s ease;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M2.5 4.5L6 8l3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
 }
 
-.sql-run-btn:hover {
-  box-shadow: var(--spectra-glow);
+.sql-playground-header select:hover {
+  border-color: var(--spectra-blue);
 }
 
 .sql-editor {
-  padding: 1.5rem;
+  padding: 1.25rem 1.5rem;
   font-family: var(--sl-font-mono);
   white-space: pre;
   line-height: 1.6;
   color: var(--spectra-text);
-  min-height: 120px;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .sql-results {
@@ -405,17 +273,17 @@
 
 .sql-results th {
   text-align: left;
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.75rem;
   border-bottom: 2px solid var(--spectra-blue);
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--spectra-blue);
 }
 
 .sql-results td {
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.75rem;
   border-bottom: 1px solid var(--spectra-card-border);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--spectra-text);
 }
 
@@ -429,16 +297,16 @@
 .sql-num { color: #fbbf24; }
 .sql-cmt { color: #64748b; font-style: italic; }
 
-:root[data-theme='light'] .sql-kw { color: #2563eb; font-weight: 600; }
+:root[data-theme='light'] .sql-kw { color: #2563eb; }
 :root[data-theme='light'] .sql-str { color: #16a34a; }
 :root[data-theme='light'] .sql-num { color: #d97706; }
-:root[data-theme='light'] .sql-cmt { color: #94a3b8; font-style: italic; }
+:root[data-theme='light'] .sql-cmt { color: #94a3b8; }
 
 /* ---------------------------------------------------------------------------
    Config Explorer
    --------------------------------------------------------------------------- */
 .config-explorer {
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid var(--spectra-card-border);
   overflow: hidden;
   background: var(--spectra-card-bg);
@@ -447,12 +315,12 @@
 
 .config-search {
   width: 100%;
-  padding: 0.8rem 1.2rem;
+  padding: 0.75rem 1.2rem;
   background: var(--spectra-surface);
   border: none;
   border-bottom: 1px solid var(--spectra-card-border);
   color: var(--spectra-text);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-family: var(--sl-font);
   outline: none;
 }
@@ -462,7 +330,7 @@
 }
 
 .config-search:focus {
-  background: var(--spectra-dark);
+  box-shadow: inset 0 -2px 0 var(--spectra-blue);
 }
 
 .config-group {
@@ -477,17 +345,15 @@
 .config-group-title {
   font-weight: 600;
   color: var(--spectra-blue);
-  margin-bottom: 0.75rem;
-  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .config-item {
-  padding: 0.75rem 0;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.08);
-  display: grid;
-  grid-template-columns: 1fr 120px auto;
-  gap: 1rem;
-  align-items: center;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.06);
 }
 
 .config-item:last-child {
@@ -498,78 +364,20 @@
   font-family: var(--sl-font-mono);
   font-weight: 500;
   color: var(--spectra-text);
-  font-size: 0.9rem;
+  font-size: 0.88rem;
 }
 
 .config-item-default {
   font-family: var(--sl-font-mono);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--spectra-emerald);
 }
 
 .config-item-desc {
-  grid-column: 1 / -1;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--spectra-text-muted);
   margin-top: 0.25rem;
   line-height: 1.5;
-}
-
-/* ---------------------------------------------------------------------------
-   Timeline Visual (Bitemporal)
-   --------------------------------------------------------------------------- */
-.timeline-container {
-  position: relative;
-  padding: 2rem 0;
-}
-
-.timeline-axis {
-  position: relative;
-  height: 3px;
-  background: var(--spectra-card-border);
-  margin: 2rem 0;
-}
-
-.timeline-axis-label {
-  position: absolute;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--spectra-text-muted);
-}
-
-.timeline-event {
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--spectra-gradient);
-  transform: translate(-50%, -50%);
-  top: 50%;
-  animation: pulse-dot 2s ease-in-out infinite;
-  z-index: 2;
-}
-
-.timeline-event-label {
-  position: absolute;
-  top: 20px;
-  font-size: 0.7rem;
-  white-space: nowrap;
-  color: var(--spectra-text-muted);
-}
-
-.timeline-query-range {
-  position: absolute;
-  height: 100%;
-  background: rgba(59, 130, 246, 0.15);
-  border-left: 2px dashed var(--spectra-blue);
-  border-right: 2px dashed var(--spectra-blue);
-  top: 0;
-  z-index: 1;
-}
-
-@keyframes pulse-dot {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
-  50% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0); }
 }
 
 /* ---------------------------------------------------------------------------
@@ -577,81 +385,33 @@
    --------------------------------------------------------------------------- */
 .arch-diagram {
   background: var(--spectra-dark);
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 2rem;
   border: 1px solid var(--spectra-card-border);
   overflow-x: auto;
   margin: 1.5rem 0;
 }
 
-.arch-diagram svg {
-  max-width: 100%;
-  height: auto;
-}
-
 /* ---------------------------------------------------------------------------
-   Utility Classes
-   --------------------------------------------------------------------------- */
-.gradient-text {
-  background: var(--spectra-gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  background: rgba(59, 130, 246, 0.15);
-  color: var(--spectra-blue);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-}
-
-.badge.emerald {
-  background: rgba(16, 185, 129, 0.15);
-  color: var(--spectra-emerald);
-  border-color: rgba(16, 185, 129, 0.3);
-}
-
-.badge.amber {
-  background: rgba(245, 158, 11, 0.15);
-  color: var(--spectra-amber);
-  border-color: rgba(245, 158, 11, 0.3);
-}
-
-.badge.violet {
-  background: rgba(139, 92, 246, 0.15);
-  color: var(--spectra-violet);
-  border-color: rgba(139, 92, 246, 0.3);
-}
-
-/* ---------------------------------------------------------------------------
-   Starlight Default Overrides
+   Starlight Overrides
    --------------------------------------------------------------------------- */
 a {
   transition: color 0.2s ease;
 }
 
-/* Inline code styling */
 :not(pre) > code {
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.15);
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.12);
   border-radius: 4px;
   padding: 0.15em 0.35em;
   font-size: 0.88em;
 }
 
-/* Code block borders */
 pre {
   border: 1px solid var(--spectra-card-border) !important;
-  border-radius: 10px !important;
+  border-radius: 8px !important;
 }
 
-/* Table styling */
 .sl-markdown-content table {
   border-collapse: collapse;
   width: 100%;
@@ -659,88 +419,57 @@ pre {
 }
 
 .sl-markdown-content th {
-  background: rgba(59, 130, 246, 0.12);
+  background: rgba(59, 130, 246, 0.1);
   border-bottom: 2px solid var(--spectra-blue);
-  padding: 0.6rem 1rem;
+  padding: 0.5rem 0.75rem;
   text-align: left;
   font-weight: 600;
+  font-size: 0.88rem;
   color: var(--spectra-text);
 }
 
 .sl-markdown-content td {
-  padding: 0.6rem 1rem;
+  padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--spectra-card-border);
   color: var(--spectra-text-muted);
+  font-size: 0.88rem;
 }
 
 .sl-markdown-content tr:hover {
   background: var(--spectra-card-bg);
 }
 
-/* Active sidebar indicator */
 nav.sidebar a[aria-current='page'] {
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(59, 130, 246, 0.08);
   border-left: 3px solid var(--spectra-blue);
 }
 
 /* ---------------------------------------------------------------------------
-   Responsive Design
+   Responsive
    --------------------------------------------------------------------------- */
 @media (max-width: 768px) {
-  .hero-section {
-    min-height: 60vh;
-    padding: 3rem 1.5rem;
-  }
-  .hero-tagline {
-    font-size: clamp(1.6rem, 6vw, 2.4rem);
-  }
-  .hero-stats {
-    flex-wrap: wrap;
-    gap: 1.5rem;
-  }
   .feature-grid {
     grid-template-columns: 1fr;
   }
   .config-item {
     grid-template-columns: 1fr;
   }
-  .config-item-default {
-    justify-self: start;
-  }
   .perf-chart {
     max-width: 100%;
-  }
-  .arch-diagram {
-    padding: 1rem;
   }
   .sql-playground-header {
     flex-direction: column;
     gap: 0.75rem;
     align-items: stretch;
   }
+  .home-section {
+    padding: 2rem 0;
+  }
 }
 
 @media (max-width: 480px) {
-  .hero-cta {
+  .cta-links {
     flex-direction: column;
-    align-items: stretch;
-  }
-  .hero-cta a {
-    justify-content: center;
-  }
-  .code-tabs-header {
-    flex-wrap: wrap;
-  }
-  .code-tab-button {
-    flex: 1;
-    text-align: center;
-    padding: 0.6rem 0.75rem;
-    font-size: 0.8rem;
-  }
-  .hero-stat-number {
-    font-size: 2rem;
-  }
-  .feature-card {
-    padding: 1.5rem;
+    align-items: center;
   }
 }
