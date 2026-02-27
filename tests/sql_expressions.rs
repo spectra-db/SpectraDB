@@ -267,6 +267,7 @@ fn delete_all_rows() {
 
 // --- JOIN tests ---
 
+#[allow(dead_code)]
 fn setup_join_tables(db: &Database) {
     db.sql("CREATE TABLE orders (pk TEXT PRIMARY KEY);")
         .unwrap();

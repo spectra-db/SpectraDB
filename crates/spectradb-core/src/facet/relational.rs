@@ -57,6 +57,40 @@ pub struct IndexMetadata {
     pub unique: bool,
 }
 
+/// Metadata for a fulltext search index.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FtsIndexMetadata {
+    pub name: String,
+    pub table: String,
+    pub columns: Vec<String>,
+}
+
+/// Metadata for a time-series table.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TimeseriesMetadata {
+    pub table: String,
+    pub bucket_interval: String,
+    pub bucket_seconds: u64,
+    pub ts_column: String,
+    pub value_columns: Vec<String>,
+}
+
+const TS_TABLE_META_PREFIX: &str = "__meta/ts_table";
+
+pub fn ts_table_meta_key(table: &str) -> Vec<u8> {
+    format!("{TS_TABLE_META_PREFIX}/{table}").into_bytes()
+}
+
+const FTS_INDEX_META_PREFIX: &str = "__meta/fts_index";
+
+pub fn fts_index_meta_key(table: &str, index: &str) -> Vec<u8> {
+    format!("{FTS_INDEX_META_PREFIX}/{table}/{index}").into_bytes()
+}
+
+pub fn fts_index_prefix_for_table(table: &str) -> Vec<u8> {
+    format!("{FTS_INDEX_META_PREFIX}/{table}/").into_bytes()
+}
+
 fn default_pk_name() -> String {
     "pk".to_string()
 }

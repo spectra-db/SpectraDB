@@ -210,9 +210,9 @@ impl SsTableReader {
         b.copy_from_slice(&mmap[4..8]);
         let version = u32::from_le_bytes(b);
         if version != SST_VERSION_V1 && version != SST_VERSION_V2 {
-            return Err(SpectraError::SstableFormat(
-                format!("unsupported SSTable version: {version}"),
-            ));
+            return Err(SpectraError::SstableFormat(format!(
+                "unsupported SSTable version: {version}"
+            )));
         }
         b.copy_from_slice(&mmap[8..12]);
         let block_size = u32::from_le_bytes(b);
@@ -375,9 +375,8 @@ impl SsTableReader {
     fn read_block_data(&self, block_start: usize, block_len: usize) -> Result<Vec<u8>> {
         let raw = &self.mmap[block_start + 4..block_start + 4 + block_len];
         if self.version == SST_VERSION_V2 {
-            lz4_flex::decompress_size_prepended(raw).map_err(|e| {
-                SpectraError::SstableFormat(format!("LZ4 decompress error: {e}"))
-            })
+            lz4_flex::decompress_size_prepended(raw)
+                .map_err(|e| SpectraError::SstableFormat(format!("LZ4 decompress error: {e}")))
         } else {
             Ok(raw.to_vec())
         }

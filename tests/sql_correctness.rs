@@ -43,11 +43,15 @@ fn numeric_order_by_ascending() {
         .unwrap();
     match result {
         SqlResult::Rows(rows) => {
-            let strs = rows_to_strings(rows);
+            assert_eq!(rows.len(), 5);
+            let values: Vec<f64> = rows
+                .iter()
+                .map(|r| {
+                    let v: serde_json::Value = serde_json::from_slice(r).unwrap();
+                    v["value"].as_f64().unwrap()
+                })
+                .collect();
             // Proper numeric ordering: 2, 9, 10, 20, 100
-            // Lexicographic would give: 10, 100, 2, 20, 9
-            assert_eq!(strs.len(), 5);
-            let values: Vec<f64> = strs.iter().map(|s| s.parse::<f64>().unwrap()).collect();
             assert_eq!(values, vec![2.0, 9.0, 10.0, 20.0, 100.0]);
         }
         other => panic!("unexpected: {other:?}"),
@@ -73,8 +77,13 @@ fn numeric_order_by_descending() {
         .unwrap();
     match result {
         SqlResult::Rows(rows) => {
-            let strs = rows_to_strings(rows);
-            let values: Vec<f64> = strs.iter().map(|s| s.parse::<f64>().unwrap()).collect();
+            let values: Vec<f64> = rows
+                .iter()
+                .map(|r| {
+                    let v: serde_json::Value = serde_json::from_slice(r).unwrap();
+                    v["value"].as_f64().unwrap()
+                })
+                .collect();
             assert_eq!(values, vec![100.0, 10.0, 9.0, 2.0]);
         }
         other => panic!("unexpected: {other:?}"),
@@ -222,10 +231,8 @@ fn cast_integer() {
         .unwrap();
     match result {
         SqlResult::Rows(rows) => {
-            let strs = rows_to_strings(rows);
-            // 3.7 cast to integer = 3
-            let v: f64 = strs[0].parse().unwrap();
-            assert_eq!(v, 3.0);
+            let v: serde_json::Value = serde_json::from_slice(&rows[0]).unwrap();
+            assert_eq!(v["int_val"], 3.0);
         }
         other => panic!("unexpected: {other:?}"),
     }
@@ -241,8 +248,8 @@ fn cast_text() {
     let result = db.sql("SELECT CAST(val AS TEXT) AS txt FROM t;").unwrap();
     match result {
         SqlResult::Rows(rows) => {
-            let strs = rows_to_strings(rows);
-            assert_eq!(strs[0], "42");
+            let v: serde_json::Value = serde_json::from_slice(&rows[0]).unwrap();
+            assert_eq!(v["txt"], "42");
         }
         other => panic!("unexpected: {other:?}"),
     }
@@ -282,9 +289,11 @@ fn cast_real() {
     let result = db.sql("SELECT CAST(val AS REAL) AS num FROM t;").unwrap();
     match result {
         SqlResult::Rows(rows) => {
-            let strs = rows_to_strings(rows);
-            let v: f64 = strs[0].parse().unwrap();
-            assert!((v - 3.14).abs() < 0.001);
+            let v: serde_json::Value = serde_json::from_slice(&rows[0]).unwrap();
+            #[allow(clippy::approx_constant)]
+            {
+                assert!((v["num"].as_f64().unwrap() - 3.14).abs() < 0.001);
+            }
         }
         other => panic!("unexpected: {other:?}"),
     }
@@ -298,7 +307,7 @@ fn transaction_reads_own_writes() {
     db.sql("CREATE TABLE t (pk TEXT PRIMARY KEY);").unwrap();
 
     // Use a multi-statement SQL that does BEGIN, INSERT, SELECT, COMMIT in one call
-    let result = db
+    let _result = db
         .sql(
             "BEGIN; \
              INSERT INTO t (pk, doc) VALUES ('txn1', '{\"hello\":\"world\"}'); \

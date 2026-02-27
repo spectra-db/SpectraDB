@@ -98,15 +98,20 @@ fn bench_sqlite_point_write(c: &mut Criterion) {
     conn.execute_batch(
         "PRAGMA journal_mode=WAL;
          PRAGMA synchronous=NORMAL;
-         CREATE TABLE bench (key TEXT PRIMARY KEY, doc TEXT);"
-    ).unwrap();
+         CREATE TABLE bench (key TEXT PRIMARY KEY, doc TEXT);",
+    )
+    .unwrap();
 
     let mut i = 0u64;
     c.bench_function("sqlite_point_write", |b| {
         b.iter(|| {
             let key = format!("bench/{i:08}");
             let doc = format!("{{\"n\":{i}}}");
-            conn.execute("INSERT OR REPLACE INTO bench (key, doc) VALUES (?1, ?2)", [&key, &doc]).unwrap();
+            conn.execute(
+                "INSERT OR REPLACE INTO bench (key, doc) VALUES (?1, ?2)",
+                [&key, &doc],
+            )
+            .unwrap();
             i += 1;
         })
     });
@@ -119,17 +124,21 @@ fn bench_sqlite_point_read(c: &mut Criterion) {
     conn.execute_batch(
         "PRAGMA journal_mode=WAL;
          PRAGMA synchronous=NORMAL;
-         CREATE TABLE bench (key TEXT PRIMARY KEY, doc TEXT);"
-    ).unwrap();
+         CREATE TABLE bench (key TEXT PRIMARY KEY, doc TEXT);",
+    )
+    .unwrap();
 
     // Pre-populate
     for i in 0..10_000u64 {
         let key = format!("bench/{i:08}");
         let doc = format!("{{\"n\":{i}}}");
-        conn.execute("INSERT INTO bench (key, doc) VALUES (?1, ?2)", [&key, &doc]).unwrap();
+        conn.execute("INSERT INTO bench (key, doc) VALUES (?1, ?2)", [&key, &doc])
+            .unwrap();
     }
 
-    let mut stmt = conn.prepare("SELECT doc FROM bench WHERE key = ?1").unwrap();
+    let mut stmt = conn
+        .prepare("SELECT doc FROM bench WHERE key = ?1")
+        .unwrap();
     let mut i = 0u64;
     c.bench_function("sqlite_point_read", |b| {
         b.iter(|| {
@@ -147,18 +156,22 @@ fn bench_sqlite_scan(c: &mut Criterion) {
     conn.execute_batch(
         "PRAGMA journal_mode=WAL;
          PRAGMA synchronous=NORMAL;
-         CREATE TABLE bench (key TEXT PRIMARY KEY, doc TEXT);"
-    ).unwrap();
+         CREATE TABLE bench (key TEXT PRIMARY KEY, doc TEXT);",
+    )
+    .unwrap();
 
     for i in 0..1_000u64 {
         let key = format!("scan/{i:06}");
         let doc = format!("{{\"n\":{i}}}");
-        conn.execute("INSERT INTO bench (key, doc) VALUES (?1, ?2)", [&key, &doc]).unwrap();
+        conn.execute("INSERT INTO bench (key, doc) VALUES (?1, ?2)", [&key, &doc])
+            .unwrap();
     }
 
     c.bench_function("sqlite_prefix_scan_1000", |b| {
         b.iter(|| {
-            let mut stmt = conn.prepare("SELECT key, doc FROM bench WHERE key LIKE 'scan/%'").unwrap();
+            let mut stmt = conn
+                .prepare("SELECT key, doc FROM bench WHERE key LIKE 'scan/%'")
+                .unwrap();
             let rows: Vec<(String, String)> = stmt
                 .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
                 .unwrap()
@@ -187,7 +200,7 @@ fn bench_spectradb_mixed_workload(c: &mut Criterion) {
     let mut i = 5_000u64;
     c.bench_function("spectradb_mixed_80read_20write", |b| {
         b.iter(|| {
-            if i % 5 == 0 {
+            if i.is_multiple_of(5) {
                 // 20% writes
                 let key = format!("mixed/{i:08}");
                 let doc = format!("{{\"n\":{i}}}");
@@ -209,25 +222,33 @@ fn bench_sqlite_mixed_workload(c: &mut Criterion) {
     conn.execute_batch(
         "PRAGMA journal_mode=WAL;
          PRAGMA synchronous=NORMAL;
-         CREATE TABLE bench (key TEXT PRIMARY KEY, doc TEXT);"
-    ).unwrap();
+         CREATE TABLE bench (key TEXT PRIMARY KEY, doc TEXT);",
+    )
+    .unwrap();
 
     for i in 0..5_000u64 {
         let key = format!("mixed/{i:08}");
         let doc = format!("{{\"n\":{i}}}");
-        conn.execute("INSERT INTO bench (key, doc) VALUES (?1, ?2)", [&key, &doc]).unwrap();
+        conn.execute("INSERT INTO bench (key, doc) VALUES (?1, ?2)", [&key, &doc])
+            .unwrap();
     }
 
     let mut i = 5_000u64;
     c.bench_function("sqlite_mixed_80read_20write", |b| {
         b.iter(|| {
-            if i % 5 == 0 {
+            if i.is_multiple_of(5) {
                 let key = format!("mixed/{i:08}");
                 let doc = format!("{{\"n\":{i}}}");
-                conn.execute("INSERT OR REPLACE INTO bench (key, doc) VALUES (?1, ?2)", [&key, &doc]).unwrap();
+                conn.execute(
+                    "INSERT OR REPLACE INTO bench (key, doc) VALUES (?1, ?2)",
+                    [&key, &doc],
+                )
+                .unwrap();
             } else {
                 let key = format!("mixed/{:08}", i % 5_000);
-                let mut stmt = conn.prepare_cached("SELECT doc FROM bench WHERE key = ?1").unwrap();
+                let mut stmt = conn
+                    .prepare_cached("SELECT doc FROM bench WHERE key = ?1")
+                    .unwrap();
                 let _: Option<String> = stmt.query_row([&key], |row| row.get(0)).ok();
             }
             i += 1;

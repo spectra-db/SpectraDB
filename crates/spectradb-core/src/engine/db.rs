@@ -12,12 +12,12 @@ use crate::ai::{
 };
 use crate::config::Config;
 use crate::engine::shard::{
-    ChangeEvent, GetResult, PrefixScanResultRow, ShardCommand, ShardRuntime, ShardStats,
+    ChangeEvent, ShardCommand, ShardOpenParams, ShardReadHandle, ShardRuntime, ShardStats,
     WriteBatchItem,
 };
 use crate::error::{Result, SpectraError};
 use crate::native_bridge::{build_hasher, Hasher};
-use crate::sql::exec::{execute_sql, SqlResult};
+use crate::sql::exec::{execute_sql, PreparedStatement, SqlResult};
 use crate::storage::cache::{BlockCache, IndexCache};
 use crate::storage::manifest::Manifest;
 
@@ -87,6 +87,7 @@ pub struct Database {
     hasher: Arc<dyn Hasher + Send + Sync>,
     ai_runtime: Option<AiRuntimeHandle>,
     shard_senders: Vec<Sender<ShardCommand>>,
+    shard_read_handles: Vec<ShardReadHandle>,
     shard_handles: Vec<JoinHandle<()>>,
 }
 
@@ -112,6 +113,7 @@ impl Database {
         let index_cache = Arc::new(IndexCache::new(config.index_cache_entries));
 
         let mut shard_senders = Vec::with_capacity(config.shard_count);
+        let mut shard_read_handles = Vec::with_capacity(config.shard_count);
         let mut shard_handles = Vec::with_capacity(config.shard_count);
 
         for shard_id in 0..config.shard_count {
@@ -121,22 +123,25 @@ impl Database {
                 guard.state.shards[shard_id].clone()
             };
 
-            let runtime = ShardRuntime::open(
+            let params = ShardOpenParams {
                 shard_id,
-                &root,
-                config.clone(),
-                hasher.clone(),
-                manifest.clone(),
+                root: root.clone(),
+                config: config.clone(),
+                hasher: hasher.clone(),
+                manifest: manifest.clone(),
                 shard_state,
-                block_cache.clone(),
-                index_cache.clone(),
-            )?;
+                block_cache: block_cache.clone(),
+                index_cache: index_cache.clone(),
+            };
+
+            let (runtime, read_handle) = ShardRuntime::open(params)?;
 
             let handle = thread::Builder::new()
                 .name(format!("spectradb-shard-{shard_id}"))
                 .spawn(move || runtime.run(rx))?;
 
             shard_senders.push(tx);
+            shard_read_handles.push(read_handle);
             shard_handles.push(handle);
         }
 
@@ -168,6 +173,7 @@ impl Database {
             hasher,
             ai_runtime,
             shard_senders,
+            shard_read_handles,
             shard_handles,
         })
     }
@@ -195,13 +201,16 @@ impl Database {
         rx.recv().map_err(|_| SpectraError::ChannelClosed)?
     }
 
+    /// Direct read — bypasses the shard actor channel entirely.
     pub fn get(
         &self,
         user_key: &[u8],
         as_of: Option<u64>,
         valid_at: Option<u64>,
     ) -> Result<Option<Vec<u8>>> {
-        Ok(self.get_with_trace(user_key, as_of, valid_at)?.0)
+        let shard_id = self.shard_for(user_key);
+        let result = self.shard_read_handles[shard_id].get(user_key, as_of, valid_at)?;
+        Ok(result.value)
     }
 
     pub fn explain_get(
@@ -211,35 +220,16 @@ impl Database {
         valid_at: Option<u64>,
     ) -> Result<ExplainRow> {
         let shard_id = self.shard_for(user_key);
-        let (_, trace) = self.get_with_trace(user_key, as_of, valid_at)?;
+        let result = self.shard_read_handles[shard_id].get(user_key, as_of, valid_at)?;
         Ok(ExplainRow {
             shard_id,
-            bloom_hit: trace.bloom_hit,
-            sstable_block: trace.sstable_block,
-            commit_ts_used: trace.commit_ts_used,
+            bloom_hit: result.bloom_hit,
+            sstable_block: result.sstable_block,
+            commit_ts_used: result.commit_ts_used,
         })
     }
 
-    fn get_with_trace(
-        &self,
-        user_key: &[u8],
-        as_of: Option<u64>,
-        valid_at: Option<u64>,
-    ) -> Result<(Option<Vec<u8>>, GetResult)> {
-        let shard_id = self.shard_for(user_key);
-        let (tx, rx) = bounded(1);
-        self.shard_senders[shard_id]
-            .send(ShardCommand::Get {
-                user_key: user_key.to_vec(),
-                as_of,
-                valid_at,
-                resp: tx,
-            })
-            .map_err(|_| SpectraError::ChannelClosed)?;
-        let r = rx.recv().map_err(|_| SpectraError::ChannelClosed)??;
-        Ok((r.value.clone(), r))
-    }
-
+    /// Direct prefix scan — bypasses the shard actor channel entirely.
     pub fn scan_prefix(
         &self,
         user_key_prefix: &[u8],
@@ -251,25 +241,9 @@ impl Database {
             return Ok(Vec::new());
         }
 
-        let mut receivers = Vec::with_capacity(self.shard_senders.len());
-        for shard_tx in &self.shard_senders {
-            let (tx, rx) = bounded(1);
-            shard_tx
-                .send(ShardCommand::ScanPrefix {
-                    user_key_prefix: user_key_prefix.to_vec(),
-                    as_of,
-                    valid_at,
-                    limit,
-                    resp: tx,
-                })
-                .map_err(|_| SpectraError::ChannelClosed)?;
-            receivers.push(rx);
-        }
-
         let mut merged = Vec::new();
-        for rx in receivers {
-            let rows: Vec<PrefixScanResultRow> =
-                rx.recv().map_err(|_| SpectraError::ChannelClosed)??;
+        for read_handle in &self.shard_read_handles {
+            let rows = read_handle.scan_prefix(user_key_prefix, as_of, valid_at, limit)?;
             merged.extend(rows.into_iter().map(|row| PrefixScanRow {
                 user_key: row.user_key,
                 doc: row.doc,
@@ -317,19 +291,13 @@ impl Database {
         }
 
         // Collect results and reassemble in original order
-        let mut result = vec![0u64; receivers.iter().map(|(idxs, _)| idxs.len()).sum()];
-        // We need the total count - let's recount from receivers
-        let total: usize = receivers.iter().map(|(idxs, _)| idxs.len()).sum();
-        result.resize(total, 0);
-
-        // Actually we need to place by original index
         let max_idx = receivers
             .iter()
             .flat_map(|(idxs, _)| idxs.iter())
             .copied()
             .max()
             .unwrap_or(0);
-        result.resize(max_idx + 1, 0);
+        let mut result = vec![0u64; max_idx + 1];
 
         for (orig_indices, rx) in receivers {
             let timestamps = rx.recv().map_err(|_| SpectraError::ChannelClosed)??;
@@ -355,8 +323,19 @@ impl Database {
         rx
     }
 
+    /// Get the number of shards in this database.
+    pub fn shard_count(&self) -> usize {
+        self.config.shard_count
+    }
+
     pub fn sql(&self, query: &str) -> Result<SqlResult> {
         execute_sql(self, query)
+    }
+
+    /// Parse and plan a SQL statement once, returning a prepared statement that
+    /// can be executed repeatedly without re-parsing.
+    pub fn prepare(&self, sql: &str) -> Result<PreparedStatement> {
+        PreparedStatement::new(sql)
     }
 
     pub fn ai_stats(&self) -> AiRuntimeStats {
@@ -425,12 +404,14 @@ impl Database {
         self.ai_correlation_for_cluster(&insight.cluster_id, limit)
     }
 
+    /// Combines writer stats (from shard channels) with reader stats (from atomics).
     pub fn stats(&self) -> Result<DbStats> {
         let mut stats = DbStats {
             shard_count: self.config.shard_count,
             ..DbStats::default()
         };
 
+        // Writer stats via channel
         for tx in &self.shard_senders {
             let (stx, srx) = bounded(1);
             tx.send(ShardCommand::Stats { resp: stx })
@@ -442,6 +423,14 @@ impl Database {
             stats.compactions += shard_stats.compactions;
             stats.bloom_negatives += shard_stats.bloom_negatives;
             stats.mmap_block_reads += shard_stats.mmap_block_reads;
+        }
+
+        // Reader stats from atomics (direct reads bypass the channel)
+        for rh in &self.shard_read_handles {
+            let reader = rh.reader_stats();
+            stats.gets += reader.gets;
+            stats.bloom_negatives += reader.bloom_negatives;
+            stats.mmap_block_reads += reader.mmap_block_reads;
         }
 
         Ok(stats)

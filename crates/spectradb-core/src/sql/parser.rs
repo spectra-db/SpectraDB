@@ -3,18 +3,40 @@ use crate::error::{Result, SpectraError};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Column(String),
-    FieldAccess { column: String, path: Vec<String> },
+    FieldAccess {
+        column: String,
+        path: Vec<String>,
+    },
     StringLit(String),
     NumberLit(f64),
     BoolLit(bool),
     Null,
-    BinOp { left: Box<Expr>, op: BinOperator, right: Box<Expr> },
+    BinOp {
+        left: Box<Expr>,
+        op: BinOperator,
+        right: Box<Expr>,
+    },
     Not(Box<Expr>),
-    Function { name: String, args: Vec<Expr> },
+    Function {
+        name: String,
+        args: Vec<Expr>,
+    },
     Star,
-    IsNull { expr: Box<Expr>, negated: bool },
-    Between { expr: Box<Expr>, low: Box<Expr>, high: Box<Expr>, negated: bool },
-    InList { expr: Box<Expr>, list: Vec<Expr>, negated: bool },
+    IsNull {
+        expr: Box<Expr>,
+        negated: bool,
+    },
+    Between {
+        expr: Box<Expr>,
+        low: Box<Expr>,
+        high: Box<Expr>,
+        negated: bool,
+    },
+    InList {
+        expr: Box<Expr>,
+        list: Vec<Expr>,
+        negated: bool,
+    },
     WindowFunction {
         name: String,
         args: Vec<Expr>,
@@ -50,6 +72,7 @@ pub enum BinOperator {
     And,
     Or,
     Like,
+    ILike,
     Add,
     Sub,
     Mul,
@@ -88,10 +111,39 @@ pub struct CteClause {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TableRef {
     Named(String),
-    Subquery { query: Box<Statement>, alias: String },
+    Subquery {
+        query: Box<Statement>,
+        alias: String,
+    },
+    /// Table function: `read_csv('path')`, `read_json('path')`, etc.
+    TableFunction {
+        name: String,
+        args: Vec<Expr>,
+        alias: Option<String>,
+    },
+}
+
+/// SQL:2011 temporal query clause.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TemporalClause {
+    /// `FOR SYSTEM_TIME AS OF <ts>` — snapshot at a specific system time
+    SystemTimeAsOf(u64),
+    /// `FOR SYSTEM_TIME FROM <t1> TO <t2>` — half-open range [t1, t2)
+    SystemTimeFromTo(u64, u64),
+    /// `FOR SYSTEM_TIME BETWEEN <t1> AND <t2>` — inclusive range [t1, t2]
+    SystemTimeBetween(u64, u64),
+    /// `FOR SYSTEM_TIME ALL` — return all historical versions
+    SystemTimeAll,
+    /// `FOR APPLICATION_TIME AS OF <ts>` — business time point query
+    ApplicationTimeAsOf(u64),
+    /// `FOR APPLICATION_TIME FROM <t1> TO <t2>` — half-open range [t1, t2)
+    ApplicationTimeFromTo(u64, u64),
+    /// `FOR APPLICATION_TIME BETWEEN <t1> AND <t2>` — inclusive range [t1, t2]
+    ApplicationTimeBetween(u64, u64),
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum Statement {
     Begin,
     Commit,
@@ -111,6 +163,24 @@ pub enum Statement {
         index: String,
         table: String,
         column: String,
+    },
+    /// `CREATE FULLTEXT INDEX <name> ON <table> (<columns>)`
+    CreateFulltextIndex {
+        index: String,
+        table: String,
+        columns: Vec<String>,
+    },
+    /// `DROP FULLTEXT INDEX <name> ON <table>`
+    DropFulltextIndex {
+        index: String,
+        table: String,
+    },
+    /// `CREATE TIMESERIES TABLE <name> (ts TIMESTAMP, value REAL, ...)
+    ///  WITH (bucket_size = '<interval>')`
+    CreateTimeseriesTable {
+        table: String,
+        columns: Vec<ColumnDef>,
+        bucket_interval: String,
     },
     AlterTableAddColumn {
         table: String,
@@ -149,6 +219,8 @@ pub enum Statement {
         filter: Option<Expr>,
         as_of: Option<u64>,
         valid_at: Option<u64>,
+        /// SQL:2011 temporal clauses (FOR SYSTEM_TIME ..., FOR APPLICATION_TIME ...)
+        temporal: Vec<TemporalClause>,
         group_by: Option<Vec<Expr>>,
         having: Option<Expr>,
         order_by: Option<Vec<(Expr, OrderDirection)>>,
@@ -178,7 +250,33 @@ pub enum Statement {
         index: String,
         table: String,
     },
+    /// Set operations: UNION, UNION ALL, INTERSECT, EXCEPT
+    SetOp {
+        op: SetOpType,
+        left: Box<Statement>,
+        right: Box<Statement>,
+    },
+    /// INSERT ... RETURNING
+    InsertReturning {
+        table: String,
+        columns: Vec<String>,
+        values: Vec<Expr>,
+        returning: Vec<SelectItem>,
+    },
+    /// CREATE TABLE AS SELECT
+    CreateTableAs {
+        table: String,
+        query: Box<Statement>,
+    },
     Explain(Box<Statement>),
+    ExplainAnalyze(Box<Statement>),
+    /// `EXPLAIN AI '<key>'` — returns AI insights, provenance, and risk score for a key
+    ExplainAi {
+        key: String,
+    },
+    Analyze {
+        table: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -231,10 +329,19 @@ pub enum OrderDirection {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetOpType {
+    Union,
+    UnionAll,
+    Intersect,
+    Except,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CopyFormat {
     Csv,
     Json,
     Ndjson,
+    Parquet,
 }
 
 // Legacy re-exports for backward compatibility
@@ -249,13 +356,13 @@ pub enum SelectProjection {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Token {
     Ident(String),
-    Number(String),  // Store as string to parse as both u64 and f64
+    Number(String), // Store as string to parse as both u64 and f64
     StringLit(String),
     Symbol(char),
     // Multi-char operators
-    NotEq,      // !=
-    LtEq,       // <=
-    GtEq,       // >=
+    NotEq, // !=
+    LtEq,  // <=
+    GtEq,  // >=
 }
 
 pub fn parse_sql(input: &str) -> Result<Statement> {
@@ -265,6 +372,8 @@ pub fn parse_sql(input: &str) -> Result<Statement> {
     }
     let mut p = Parser { toks, i: 0 };
     let stmt = p.parse_statement()?;
+    // Check for set operations after the first statement
+    let stmt = p.try_parse_set_op(stmt)?;
     if p.i != p.toks.len() {
         return Err(SpectraError::SqlParse(
             "unexpected trailing tokens".to_string(),
@@ -338,8 +447,23 @@ impl Parser {
     fn parse_statement(&mut self) -> Result<Statement> {
         if self.peek_kw("EXPLAIN") {
             self.expect_kw("EXPLAIN")?;
+            if self.peek_kw("ANALYZE") {
+                self.expect_kw("ANALYZE")?;
+                let inner = self.parse_statement()?;
+                return Ok(Statement::ExplainAnalyze(Box::new(inner)));
+            }
+            if self.peek_kw("AI") {
+                self.expect_kw("AI")?;
+                let key = self.expect_string()?;
+                return Ok(Statement::ExplainAi { key });
+            }
             let inner = self.parse_statement()?;
             return Ok(Statement::Explain(Box::new(inner)));
+        }
+        if self.peek_kw("ANALYZE") {
+            self.expect_kw("ANALYZE")?;
+            let table = self.expect_ident()?;
+            return Ok(Statement::Analyze { table });
         }
         if self.peek_kw("BEGIN") {
             self.expect_kw("BEGIN")?;
@@ -390,23 +514,41 @@ impl Parser {
 
     fn parse_create(&mut self) -> Result<Statement> {
         self.expect_kw("CREATE")?;
+        if self.peek_kw("TIMESERIES") {
+            return self.parse_create_timeseries_table();
+        }
         if self.peek_kw("TABLE") {
             return self.parse_create_table_after_create();
         }
         if self.peek_kw("VIEW") {
             return self.parse_create_view_after_create();
         }
+        if self.peek_kw("FULLTEXT") {
+            return self.parse_create_fulltext_index();
+        }
         if self.peek_kw("INDEX") {
             return self.parse_create_index_after_create();
         }
         Err(SpectraError::SqlParse(
-            "expected TABLE, VIEW, or INDEX after CREATE".to_string(),
+            "expected TABLE, TIMESERIES TABLE, VIEW, FULLTEXT INDEX, or INDEX after CREATE"
+                .to_string(),
         ))
     }
 
     fn parse_create_table_after_create(&mut self) -> Result<Statement> {
         self.expect_kw("TABLE")?;
         let table = self.expect_ident()?;
+
+        // CREATE TABLE ... AS SELECT ...
+        if self.peek_kw("AS") {
+            self.expect_kw("AS")?;
+            let query = self.parse_select_or_cte()?;
+            return Ok(Statement::CreateTableAs {
+                table,
+                query: Box::new(query),
+            });
+        }
+
         self.expect_symbol('(')?;
 
         let mut columns = Vec::new();
@@ -521,6 +663,100 @@ impl Parser {
         })
     }
 
+    fn parse_create_fulltext_index(&mut self) -> Result<Statement> {
+        self.expect_kw("FULLTEXT")?;
+        self.expect_kw("INDEX")?;
+        let index = self.expect_ident()?;
+        self.expect_kw("ON")?;
+        let table = self.expect_ident()?;
+        self.expect_symbol('(')?;
+        let mut columns = Vec::new();
+        columns.push(self.expect_ident()?);
+        while self.peek_symbol(',') {
+            self.expect_symbol(',')?;
+            columns.push(self.expect_ident()?);
+        }
+        self.expect_symbol(')')?;
+        Ok(Statement::CreateFulltextIndex {
+            index,
+            table,
+            columns,
+        })
+    }
+
+    /// Parse `CREATE TIMESERIES TABLE <name> (<columns>) WITH (bucket_size = '<interval>')`
+    fn parse_create_timeseries_table(&mut self) -> Result<Statement> {
+        self.expect_kw("TIMESERIES")?;
+        self.expect_kw("TABLE")?;
+        let table = self.expect_ident()?;
+        self.expect_symbol('(')?;
+
+        let mut columns = Vec::new();
+        loop {
+            let col_name = self.expect_ident()?;
+            let type_name_str = self.expect_ident()?;
+            let type_name = SqlType::from_str_name(&type_name_str).ok_or_else(|| {
+                SpectraError::SqlParse(format!("unknown column type: {type_name_str}"))
+            })?;
+
+            let mut primary_key = false;
+            let mut not_null = false;
+            loop {
+                if self.peek_kw("PRIMARY") {
+                    self.expect_kw("PRIMARY")?;
+                    self.expect_kw("KEY")?;
+                    primary_key = true;
+                } else if self.peek_kw("NOT") {
+                    self.expect_kw("NOT")?;
+                    self.expect_kw("NULL")?;
+                    not_null = true;
+                } else {
+                    break;
+                }
+            }
+
+            columns.push(ColumnDef {
+                name: col_name,
+                type_name,
+                primary_key,
+                not_null,
+            });
+
+            if self.peek_symbol(',') {
+                self.expect_symbol(',')?;
+            } else {
+                break;
+            }
+        }
+        self.expect_symbol(')')?;
+
+        // Parse optional WITH (bucket_size = '<interval>')
+        let mut bucket_interval = "1h".to_string();
+        if self.peek_kw("WITH") {
+            self.expect_kw("WITH")?;
+            self.expect_symbol('(')?;
+            loop {
+                let key = self.expect_ident()?;
+                self.expect_symbol('=')?;
+                let val = self.expect_string()?;
+                if key.eq_ignore_ascii_case("bucket_size") {
+                    bucket_interval = val;
+                }
+                if !self.peek_symbol(',') {
+                    break;
+                }
+                self.expect_symbol(',')?;
+            }
+            self.expect_symbol(')')?;
+        }
+
+        Ok(Statement::CreateTimeseriesTable {
+            table,
+            columns,
+            bucket_interval,
+        })
+    }
+
     fn parse_create_index_after_create(&mut self) -> Result<Statement> {
         self.expect_kw("INDEX")?;
         let index = self.expect_ident()?;
@@ -594,6 +830,23 @@ impl Parser {
             return Err(SpectraError::SqlParse(
                 "column count does not match value count".to_string(),
             ));
+        }
+
+        // Check for RETURNING clause
+        if self.peek_kw("RETURNING") {
+            self.expect_kw("RETURNING")?;
+            let mut returning = Vec::new();
+            returning.push(self.parse_select_item()?);
+            while self.peek_symbol(',') {
+                self.expect_symbol(',')?;
+                returning.push(self.parse_select_item()?);
+            }
+            return Ok(Statement::InsertReturning {
+                table,
+                columns: col_names,
+                values,
+                returning,
+            });
         }
 
         Ok(Statement::InsertTyped {
@@ -726,6 +979,7 @@ impl Parser {
 
         let mut as_of = None;
         let mut valid_at = None;
+        let mut temporal = Vec::new();
         let mut group_by = None;
         let mut having = None;
         let mut order_by = None;
@@ -753,6 +1007,14 @@ impl Parser {
                 self.expect_kw("VALID")?;
                 self.expect_kw("AT")?;
                 valid_at = Some(self.expect_number_u64()?);
+                continue;
+            }
+
+            // SQL:2011 temporal clauses: FOR SYSTEM_TIME / FOR APPLICATION_TIME
+            if self.peek_kw("FOR") {
+                self.expect_kw("FOR")?;
+                let clause = self.parse_temporal_for_clause()?;
+                temporal.push(clause);
                 continue;
             }
 
@@ -843,6 +1105,7 @@ impl Parser {
             filter,
             as_of,
             valid_at,
+            temporal,
             group_by,
             having,
             order_by,
@@ -888,7 +1151,44 @@ impl Parser {
             })
         } else {
             let name = self.expect_ident()?;
-            Ok(TableRef::Named(name))
+            // Check if this is a table function call: name(args)
+            if self.peek_symbol('(') {
+                self.expect_symbol('(')?;
+                let mut args = Vec::new();
+                if !self.peek_symbol(')') {
+                    args.push(self.parse_expr()?);
+                    while self.peek_symbol(',') {
+                        self.expect_symbol(',')?;
+                        args.push(self.parse_expr()?);
+                    }
+                }
+                self.expect_symbol(')')?;
+                let alias = if self.peek_kw("AS") {
+                    self.expect_kw("AS")?;
+                    Some(self.expect_ident()?)
+                } else if self.peek_ident()
+                    && !self.peek_kw("WHERE")
+                    && !self.peek_kw("ORDER")
+                    && !self.peek_kw("LIMIT")
+                    && !self.peek_kw("GROUP")
+                    && !self.peek_kw("HAVING")
+                    && !self.peek_kw("JOIN")
+                    && !self.peek_kw("INNER")
+                    && !self.peek_kw("LEFT")
+                    && !self.peek_kw("RIGHT")
+                    && !self.peek_kw("CROSS")
+                    && !self.peek_kw("UNION")
+                    && !self.peek_kw("INTERSECT")
+                    && !self.peek_kw("EXCEPT")
+                {
+                    Some(self.expect_ident()?)
+                } else {
+                    None
+                };
+                Ok(TableRef::TableFunction { name, args, alias })
+            } else {
+                Ok(TableRef::Named(name))
+            }
         }
     }
 
@@ -987,6 +1287,77 @@ impl Parser {
             break;
         }
         Ok(())
+    }
+
+    /// Parse a SQL:2011 temporal FOR clause after the `FOR` keyword has been consumed.
+    /// Parses: SYSTEM_TIME {AS OF <n> | FROM <n> TO <n> | BETWEEN <n> AND <n> | ALL}
+    ///         APPLICATION_TIME {AS OF <n> | FROM <n> TO <n> | BETWEEN <n> AND <n>}
+    fn parse_temporal_for_clause(&mut self) -> Result<TemporalClause> {
+        if self.peek_kw("SYSTEM_TIME") {
+            self.expect_kw("SYSTEM_TIME")?;
+
+            if self.peek_kw("AS") {
+                self.expect_kw("AS")?;
+                self.expect_kw("OF")?;
+                let ts = self.expect_number_u64()?;
+                return Ok(TemporalClause::SystemTimeAsOf(ts));
+            }
+            if self.peek_kw("FROM") {
+                self.expect_kw("FROM")?;
+                let t1 = self.expect_number_u64()?;
+                self.expect_kw("TO")?;
+                let t2 = self.expect_number_u64()?;
+                return Ok(TemporalClause::SystemTimeFromTo(t1, t2));
+            }
+            if self.peek_kw("BETWEEN") {
+                self.expect_kw("BETWEEN")?;
+                let t1 = self.expect_number_u64()?;
+                self.expect_kw("AND")?;
+                let t2 = self.expect_number_u64()?;
+                return Ok(TemporalClause::SystemTimeBetween(t1, t2));
+            }
+            if self.peek_kw("ALL") {
+                self.expect_kw("ALL")?;
+                return Ok(TemporalClause::SystemTimeAll);
+            }
+            return Err(SpectraError::SqlParse(
+                "expected AS OF, FROM ... TO, BETWEEN ... AND, or ALL after SYSTEM_TIME"
+                    .to_string(),
+            ));
+        }
+
+        if self.peek_kw("APPLICATION_TIME") {
+            self.expect_kw("APPLICATION_TIME")?;
+
+            if self.peek_kw("AS") {
+                self.expect_kw("AS")?;
+                self.expect_kw("OF")?;
+                let ts = self.expect_number_u64()?;
+                return Ok(TemporalClause::ApplicationTimeAsOf(ts));
+            }
+            if self.peek_kw("FROM") {
+                self.expect_kw("FROM")?;
+                let t1 = self.expect_number_u64()?;
+                self.expect_kw("TO")?;
+                let t2 = self.expect_number_u64()?;
+                return Ok(TemporalClause::ApplicationTimeFromTo(t1, t2));
+            }
+            if self.peek_kw("BETWEEN") {
+                self.expect_kw("BETWEEN")?;
+                let t1 = self.expect_number_u64()?;
+                self.expect_kw("AND")?;
+                let t2 = self.expect_number_u64()?;
+                return Ok(TemporalClause::ApplicationTimeBetween(t1, t2));
+            }
+            return Err(SpectraError::SqlParse(
+                "expected AS OF, FROM ... TO, or BETWEEN ... AND after APPLICATION_TIME"
+                    .to_string(),
+            ));
+        }
+
+        Err(SpectraError::SqlParse(
+            "expected SYSTEM_TIME or APPLICATION_TIME after FOR".to_string(),
+        ))
     }
 
     // Expression parser: precedence climbing
@@ -1093,6 +1464,15 @@ impl Parser {
                     right: Box::new(right),
                 })));
             }
+            if self.peek_kw("ILIKE") {
+                self.expect_kw("ILIKE")?;
+                let right = self.parse_addition()?;
+                return Ok(Expr::Not(Box::new(Expr::BinOp {
+                    left: Box::new(left),
+                    op: BinOperator::ILike,
+                    right: Box::new(right),
+                })));
+            }
             self.i = saved;
         }
 
@@ -1135,6 +1515,17 @@ impl Parser {
             return Ok(Expr::BinOp {
                 left: Box::new(left),
                 op: BinOperator::Like,
+                right: Box::new(right),
+            });
+        }
+
+        // ILIKE (case-insensitive LIKE)
+        if self.peek_kw("ILIKE") {
+            self.expect_kw("ILIKE")?;
+            let right = self.parse_addition()?;
+            return Ok(Expr::BinOp {
+                left: Box::new(left),
+                op: BinOperator::ILike,
                 right: Box::new(right),
             });
         }
@@ -1384,10 +1775,7 @@ impl Parser {
                     });
                 }
 
-                return Ok(Expr::Function {
-                    name: ident,
-                    args,
-                });
+                return Ok(Expr::Function { name: ident, args });
             }
 
             // Qualified reference: ident.field or ident.field.field
@@ -1503,6 +1891,14 @@ impl Parser {
             let view = self.expect_ident()?;
             return Ok(Statement::DropView { view });
         }
+        if self.peek_kw("FULLTEXT") {
+            self.expect_kw("FULLTEXT")?;
+            self.expect_kw("INDEX")?;
+            let index = self.expect_ident()?;
+            self.expect_kw("ON")?;
+            let table = self.expect_ident()?;
+            return Ok(Statement::DropFulltextIndex { index, table });
+        }
         if self.peek_kw("INDEX") {
             self.expect_kw("INDEX")?;
             let index = self.expect_ident()?;
@@ -1511,7 +1907,7 @@ impl Parser {
             return Ok(Statement::DropIndex { index, table });
         }
         Err(SpectraError::SqlParse(
-            "expected TABLE, VIEW, or INDEX after DROP".to_string(),
+            "expected TABLE, VIEW, FULLTEXT INDEX, or INDEX after DROP".to_string(),
         ))
     }
 
@@ -1523,12 +1919,20 @@ impl Parser {
             self.expect_kw("TO")?;
             let path = self.expect_string()?;
             let format = self.parse_copy_format()?;
-            Ok(Statement::CopyTo { table, path, format })
+            Ok(Statement::CopyTo {
+                table,
+                path,
+                format,
+            })
         } else if self.peek_kw("FROM") {
             self.expect_kw("FROM")?;
             let path = self.expect_string()?;
             let format = self.parse_copy_format()?;
-            Ok(Statement::CopyFrom { table, path, format })
+            Ok(Statement::CopyFrom {
+                table,
+                path,
+                format,
+            })
         } else {
             Err(SpectraError::SqlParse(
                 "expected TO or FROM after COPY table".to_string(),
@@ -1555,8 +1959,53 @@ impl Parser {
             self.expect_kw("NDJSON")?;
             return Ok(CopyFormat::Ndjson);
         }
+        if self.peek_kw("PARQUET") {
+            self.expect_kw("PARQUET")?;
+            return Ok(CopyFormat::Parquet);
+        }
         // Default to CSV
         Ok(CopyFormat::Csv)
+    }
+
+    /// Check for UNION / UNION ALL / INTERSECT / EXCEPT after a SELECT.
+    fn try_parse_set_op(&mut self, left: Statement) -> Result<Statement> {
+        if self.peek_kw("UNION") {
+            self.expect_kw("UNION")?;
+            let op = if self.peek_kw("ALL") {
+                self.expect_kw("ALL")?;
+                SetOpType::UnionAll
+            } else {
+                SetOpType::Union
+            };
+            let right = self.parse_select_or_cte()?;
+            let right = self.try_parse_set_op(right)?;
+            return Ok(Statement::SetOp {
+                op,
+                left: Box::new(left),
+                right: Box::new(right),
+            });
+        }
+        if self.peek_kw("INTERSECT") {
+            self.expect_kw("INTERSECT")?;
+            let right = self.parse_select_or_cte()?;
+            let right = self.try_parse_set_op(right)?;
+            return Ok(Statement::SetOp {
+                op: SetOpType::Intersect,
+                left: Box::new(left),
+                right: Box::new(right),
+            });
+        }
+        if self.peek_kw("EXCEPT") {
+            self.expect_kw("EXCEPT")?;
+            let right = self.parse_select_or_cte()?;
+            let right = self.try_parse_set_op(right)?;
+            return Ok(Statement::SetOp {
+                op: SetOpType::Except,
+                left: Box::new(left),
+                right: Box::new(right),
+            });
+        }
+        Ok(left)
     }
 
     // ---- Token helpers ----
@@ -1633,9 +2082,9 @@ impl Parser {
     fn expect_number_u64(&mut self) -> Result<u64> {
         match self.toks.get(self.i) {
             Some(Token::Number(s)) => {
-                let n = s.parse::<u64>().map_err(|_| {
-                    SpectraError::SqlParse("invalid number".to_string())
-                })?;
+                let n = s
+                    .parse::<u64>()
+                    .map_err(|_| SpectraError::SqlParse("invalid number".to_string()))?;
                 self.i += 1;
                 Ok(n)
             }
@@ -1648,9 +2097,9 @@ impl Parser {
     fn expect_number_f64(&mut self) -> Result<f64> {
         match self.toks.get(self.i) {
             Some(Token::Number(s)) => {
-                let n = s.parse::<f64>().map_err(|_| {
-                    SpectraError::SqlParse("invalid number".to_string())
-                })?;
+                let n = s
+                    .parse::<f64>()
+                    .map_err(|_| SpectraError::SqlParse("invalid number".to_string()))?;
                 self.i += 1;
                 Ok(n)
             }
@@ -1689,7 +2138,22 @@ pub fn extract_pk_eq_literal(expr: Option<&Expr>) -> Option<String> {
 pub fn is_aggregate_function(name: &str) -> bool {
     matches!(
         name.to_uppercase().as_str(),
-        "COUNT" | "SUM" | "AVG" | "MIN" | "MAX"
+        "COUNT"
+            | "SUM"
+            | "AVG"
+            | "MIN"
+            | "MAX"
+            | "FIRST"
+            | "LAST"
+            | "STRING_AGG"
+            | "GROUP_CONCAT"
+            | "STDDEV"
+            | "STDDEV_POP"
+            | "STDDEV_SAMP"
+            | "VARIANCE"
+            | "VAR_POP"
+            | "VAR_SAMP"
+            | "APPROX_COUNT_DISTINCT"
     )
 }
 
@@ -1714,12 +2178,26 @@ fn expr_contains_window(expr: &Expr) -> bool {
             expr_contains_window(left) || expr_contains_window(right)
         }
         Expr::Not(inner) => expr_contains_window(inner),
-        Expr::Case { operand, when_clauses, else_clause } => {
-            if let Some(op) = operand { if expr_contains_window(op) { return true; } }
-            for (cond, result) in when_clauses {
-                if expr_contains_window(cond) || expr_contains_window(result) { return true; }
+        Expr::Case {
+            operand,
+            when_clauses,
+            else_clause,
+        } => {
+            if let Some(op) = operand {
+                if expr_contains_window(op) {
+                    return true;
+                }
             }
-            if let Some(el) = else_clause { if expr_contains_window(el) { return true; } }
+            for (cond, result) in when_clauses {
+                if expr_contains_window(cond) || expr_contains_window(result) {
+                    return true;
+                }
+            }
+            if let Some(el) = else_clause {
+                if expr_contains_window(el) {
+                    return true;
+                }
+            }
             false
         }
         Expr::Cast { expr, .. } => expr_contains_window(expr),
@@ -1739,12 +2217,26 @@ fn expr_contains_aggregate(expr: &Expr) -> bool {
             expr_contains_aggregate(left) || expr_contains_aggregate(right)
         }
         Expr::Not(inner) => expr_contains_aggregate(inner),
-        Expr::Case { operand, when_clauses, else_clause } => {
-            if let Some(op) = operand { if expr_contains_aggregate(op) { return true; } }
-            for (cond, result) in when_clauses {
-                if expr_contains_aggregate(cond) || expr_contains_aggregate(result) { return true; }
+        Expr::Case {
+            operand,
+            when_clauses,
+            else_clause,
+        } => {
+            if let Some(op) = operand {
+                if expr_contains_aggregate(op) {
+                    return true;
+                }
             }
-            if let Some(el) = else_clause { if expr_contains_aggregate(el) { return true; } }
+            for (cond, result) in when_clauses {
+                if expr_contains_aggregate(cond) || expr_contains_aggregate(result) {
+                    return true;
+                }
+            }
+            if let Some(el) = else_clause {
+                if expr_contains_aggregate(el) {
+                    return true;
+                }
+            }
             false
         }
         Expr::Cast { expr, .. } => expr_contains_aggregate(expr),
@@ -1817,7 +2309,11 @@ fn tokenize(input: &str) -> Result<Vec<Token>> {
                 i += 1;
             }
             // Check for decimal point
-            if i < chars.len() && chars[i] == '.' && i + 1 < chars.len() && chars[i + 1].is_ascii_digit() {
+            if i < chars.len()
+                && chars[i] == '.'
+                && i + 1 < chars.len()
+                && chars[i + 1].is_ascii_digit()
+            {
                 i += 1; // skip the dot
                 while i < chars.len() && chars[i].is_ascii_digit() {
                     i += 1;
@@ -1827,6 +2323,17 @@ fn tokenize(input: &str) -> Result<Vec<Token>> {
             out.push(Token::Number(num_str));
             continue;
         }
+        // Parameter placeholders: $1, $2, ...
+        if c == '$' && i + 1 < chars.len() && chars[i + 1].is_ascii_digit() {
+            let start = i;
+            i += 1; // skip $
+            while i < chars.len() && chars[i].is_ascii_digit() {
+                i += 1;
+            }
+            out.push(Token::Ident(input[start..i].to_string()));
+            continue;
+        }
+
         if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
             let start = i;
             i += 1;
@@ -1859,12 +2366,17 @@ mod tests {
     #[test]
     fn parses_create_table_legacy() {
         let stmt = parse_sql("CREATE TABLE users (pk TEXT PRIMARY KEY);").unwrap();
-        assert!(matches!(stmt, Statement::CreateTable { table, columns } if table == "users" && columns.len() == 1));
+        assert!(
+            matches!(stmt, Statement::CreateTable { table, columns } if table == "users" && columns.len() == 1)
+        );
     }
 
     #[test]
     fn parses_create_table_typed() {
-        let stmt = parse_sql("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL, balance REAL);").unwrap();
+        let stmt = parse_sql(
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL, balance REAL);",
+        )
+        .unwrap();
         if let Statement::CreateTable { table, columns } = stmt {
             assert_eq!(table, "users");
             assert_eq!(columns.len(), 3);
@@ -1951,7 +2463,10 @@ mod tests {
     #[test]
     fn parses_select_scan_with_order_and_limit() {
         let stmt = parse_sql("SELECT pk, doc FROM orders ORDER BY pk DESC LIMIT 10;").unwrap();
-        if let Statement::Select { order_by, limit, .. } = stmt {
+        if let Statement::Select {
+            order_by, limit, ..
+        } = stmt
+        {
             assert!(order_by.is_some());
             let orders = order_by.unwrap();
             assert_eq!(orders.len(), 1);
@@ -1965,7 +2480,10 @@ mod tests {
     #[test]
     fn parses_select_count_with_as_of_valid_at() {
         let stmt = parse_sql("SELECT count(*) FROM orders AS OF 22 VALID AT 7;").unwrap();
-        if let Statement::Select { as_of, valid_at, .. } = stmt {
+        if let Statement::Select {
+            as_of, valid_at, ..
+        } = stmt
+        {
             assert_eq!(as_of, Some(22));
             assert_eq!(valid_at, Some(7));
         } else {
@@ -1992,7 +2510,13 @@ mod tests {
         let stmt =
             parse_sql("SELECT pk, count(*) FROM orders GROUP BY pk ORDER BY pk DESC LIMIT 3;")
                 .unwrap();
-        if let Statement::Select { group_by, order_by, limit, .. } = stmt {
+        if let Statement::Select {
+            group_by,
+            order_by,
+            limit,
+            ..
+        } = stmt
+        {
             assert!(group_by.is_some());
             assert!(order_by.is_some());
             assert_eq!(limit, Some(3));
@@ -2097,7 +2621,8 @@ mod tests {
 
     #[test]
     fn parses_having() {
-        let stmt = parse_sql("SELECT pk, count(*) FROM t GROUP BY pk HAVING count(*) > 1;").unwrap();
+        let stmt =
+            parse_sql("SELECT pk, count(*) FROM t GROUP BY pk HAVING count(*) > 1;").unwrap();
         if let Statement::Select { having, .. } = stmt {
             assert!(having.is_some());
         } else {
@@ -2138,7 +2663,13 @@ mod tests {
     fn parses_like() {
         let stmt = parse_sql("SELECT doc FROM t WHERE pk LIKE 'test%';").unwrap();
         if let Statement::Select { filter, .. } = stmt {
-            assert!(matches!(filter, Some(Expr::BinOp { op: BinOperator::Like, .. })));
+            assert!(matches!(
+                filter,
+                Some(Expr::BinOp {
+                    op: BinOperator::Like,
+                    ..
+                })
+            ));
         } else {
             panic!("expected Select");
         }
@@ -2158,7 +2689,11 @@ mod tests {
     #[test]
     fn parses_subquery_in_from() {
         let stmt = parse_sql("SELECT doc FROM (SELECT doc FROM t) sub;").unwrap();
-        if let Statement::Select { from: TableRef::Subquery { alias, .. }, .. } = stmt {
+        if let Statement::Select {
+            from: TableRef::Subquery { alias, .. },
+            ..
+        } = stmt
+        {
             assert_eq!(alias, "sub");
         } else {
             panic!("expected Select with subquery");
