@@ -120,25 +120,26 @@ const groups: ConfigGroup[] = [
     border-radius: 12px;
     border: 1px solid var(--spectra-card-border);
     overflow: hidden;
-    background: rgba(15, 23, 42, 0.5);
+    background: var(--spectra-card-bg);
   }
   .config-search {
     width: 100%;
     padding: 0.8rem 1.2rem;
-    background: #1E293B;
+    background: var(--spectra-surface);
     border: none;
     border-bottom: 1px solid var(--spectra-card-border);
-    color: var(--sl-color-white);
+    color: var(--spectra-text);
     font-size: 0.95rem;
     font-family: var(--sl-font);
     outline: none;
     box-sizing: border-box;
   }
   .config-search::placeholder {
-    color: var(--sl-color-gray-4);
+    color: var(--spectra-text-faint);
   }
   .config-search:focus {
-    background: #1a2736;
+    background: var(--spectra-dark);
+    box-shadow: inset 0 0 0 2px var(--spectra-blue);
   }
   .config-group {
     padding: 1rem 1.5rem;
@@ -157,7 +158,7 @@ const groups: ConfigGroup[] = [
   }
   .config-item {
     padding: 0.75rem 0;
-    border-bottom: 1px solid rgba(255,255,255,0.03);
+    border-bottom: 1px solid rgba(128, 128, 128, 0.08);
   }
   .config-item:last-child {
     border-bottom: none;
@@ -171,11 +172,12 @@ const groups: ConfigGroup[] = [
   .config-item-name {
     font-family: var(--sl-font-mono);
     font-weight: 600;
-    color: var(--sl-color-white);
+    color: var(--spectra-text);
     font-size: 0.9rem;
-    background: rgba(59, 130, 246, 0.1);
+    background: rgba(59, 130, 246, 0.1) !important;
     padding: 0.1rem 0.4rem;
     border-radius: 4px;
+    border: none !important;
   }
   .config-item-type {
     font-family: var(--sl-font-mono);
@@ -193,7 +195,7 @@ const groups: ConfigGroup[] = [
   }
   .config-item-desc {
     font-size: 0.85rem;
-    color: var(--sl-color-gray-3);
+    color: var(--spectra-text-muted);
     margin-top: 0.4rem;
     line-height: 1.5;
   }

@@ -24,16 +24,36 @@ const Tag = href ? 'a' : 'div';
     text-decoration: none;
     color: inherit;
     display: block;
+    background: var(--spectra-card-bg);
+    border: 1px solid var(--spectra-card-border);
+    border-radius: 16px;
+    padding: 2rem;
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  }
+  .feature-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 32px rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+  .feature-card-icon {
+    width: 48px;
+    height: 48px;
+    background: var(--spectra-gradient);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
   }
   .feature-card-title {
     font-size: 1.15rem;
     font-weight: 600;
     margin: 1rem 0 0.5rem;
-    color: var(--sl-color-white);
+    color: var(--spectra-text);
   }
   .feature-card-description {
     font-size: 0.9rem;
-    color: var(--sl-color-gray-3);
+    color: var(--spectra-text-muted);
     line-height: 1.6;
     margin: 0;
   }

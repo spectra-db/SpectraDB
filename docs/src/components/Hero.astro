@@ -1,5 +1,4 @@
 ---
-// No props needed - self-contained hero
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
@@ -17,19 +16,23 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     </p>
     <div class="hero-stats">
       <div class="hero-stat">
-        <span class="hero-stat-number">276ns</span>
+        <span class="hero-stat-number" data-target="276">0</span>
+        <span class="hero-stat-unit">ns</span>
         <span class="hero-stat-label">Point Reads</span>
       </div>
       <div class="hero-stat">
-        <span class="hero-stat-number">1.9µs</span>
+        <span class="hero-stat-number" data-target="1.9">0</span>
+        <span class="hero-stat-unit">µs</span>
         <span class="hero-stat-label">Point Writes</span>
       </div>
       <div class="hero-stat">
-        <span class="hero-stat-number">4×</span>
+        <span class="hero-stat-number" data-target="4">0</span>
+        <span class="hero-stat-unit">×</span>
         <span class="hero-stat-label">Faster than SQLite reads</span>
       </div>
       <div class="hero-stat">
-        <span class="hero-stat-number">20×</span>
+        <span class="hero-stat-number" data-target="20">0</span>
+        <span class="hero-stat-unit">×</span>
         <span class="hero-stat-label">Faster than SQLite writes</span>
       </div>
     </div>
@@ -40,6 +43,40 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     </div>
   </div>
 </section>
+
+<script>
+  function animateCounters() {
+    const counters = document.querySelectorAll('.hero-stat-number[data-target]');
+    counters.forEach(counter => {
+      const target = parseFloat(counter.getAttribute('data-target') || '0');
+      const isFloat = target % 1 !== 0;
+      const duration = 1200;
+      const start = performance.now();
+
+      function step(now: number) {
+        const elapsed = now - start;
+        const progress = Math.min(elapsed / duration, 1);
+        const ease = 1 - Math.pow(1 - progress, 3);
+        const current = target * ease;
+        counter.textContent = isFloat ? current.toFixed(1) : Math.round(current).toString();
+        if (progress < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    });
+  }
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        animateCounters();
+        observer.disconnect();
+      }
+    });
+  }, { threshold: 0.3 });
+
+  const heroSection = document.querySelector('.hero-section');
+  if (heroSection) observer.observe(heroSection);
+</script>
 
 <style>
   .hero-content {
@@ -56,12 +93,45 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
   .hero-subtitle {
     font-size: 1.2rem;
-    color: var(--sl-color-gray-3);
+    color: var(--spectra-text-muted);
     line-height: 1.7;
     margin-bottom: 2.5rem;
     max-width: 600px;
     margin-left: auto;
     margin-right: auto;
+  }
+  .hero-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  .hero-stat-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    display: inline;
+  }
+  .hero-stat-unit {
+    font-size: 1.5rem;
+    font-weight: 500;
+    opacity: 0.7;
+    display: inline;
+  }
+  .hero-stat-number, .hero-stat-unit {
+    color: var(--sl-color-white);
+  }
+  :global([data-theme='light']) .hero-stat-number,
+  :global([data-theme='light']) .hero-stat-unit {
+    color: #0f172a;
+  }
+  .hero-stat-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--spectra-text-muted);
+    margin-top: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
   .hero-btn {
     display: inline-flex;
@@ -75,7 +145,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
   .hero-btn.primary {
     background: var(--spectra-gradient);
-    color: white;
+    color: #ffffff;
   }
   .hero-btn.primary:hover {
     transform: translateY(-2px);
@@ -83,14 +153,16 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
   .hero-btn.secondary {
     background: var(--spectra-card-bg);
-    color: var(--sl-color-gray-2);
+    color: var(--spectra-text);
     border: 1px solid var(--spectra-card-border);
   }
   .hero-btn.secondary:hover {
-    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--spectra-blue);
     transform: translateY(-2px);
   }
   @media (max-width: 480px) {
     .hero-subtitle { font-size: 1rem; }
+    .hero-stat-number { font-size: 2rem; }
+    .hero-stat-unit { font-size: 1.2rem; }
   }
 </style>
