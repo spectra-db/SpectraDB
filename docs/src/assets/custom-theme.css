@@ -444,8 +444,10 @@ pre {
 }
 
 nav.sidebar a[aria-current='page'] {
-  background: rgba(59, 130, 246, 0.08);
+  background: rgba(59, 130, 246, 0.12);
   border-left: 3px solid var(--spectra-blue);
+  color: var(--spectra-blue) !important;
+  font-weight: 600;
 }
 
 /* ---------------------------------------------------------------------------
