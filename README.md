@@ -16,7 +16,7 @@
 
 SpectraDB is an embedded database written in Rust that treats every write as an immutable fact. It separates **system time** (when data was recorded) from **business-valid time** (when data was true), giving you built-in time travel and auditability with zero application-level bookkeeping.
 
-**67,000+ lines of Rust** | **224+ integration tests** | **30 test suites** | **7 workspace crates**
+**41,000+ lines of Rust** | **224+ integration tests** | **30 test suites** | **7 workspace crates**
 
 ## Performance
 
@@ -151,7 +151,7 @@ cargo run -p spectradb-cli -- --path ./mydb
 cargo run -p spectradb-cli -- --path ./mydb --ai-auto-insights
 
 # Start PostgreSQL wire protocol server
-cargo run -p spectradb-server -- --path ./mydb --port 5432
+cargo run -p spectradb-server -- --data-dir ./mydb --port 5433
 ```
 
 ```sql
@@ -246,13 +246,13 @@ ANALYZE accounts;
 </details>
 
 <details>
-<summary><strong>Date/Time Functions (6)</strong></summary>
+<summary><strong>Date/Time Functions (5)</strong></summary>
 
 `NOW`/`CURRENT_TIMESTAMP`, `EPOCH`, `EXTRACT`/`DATE_PART`, `DATE_TRUNC`, `TO_CHAR`
 </details>
 
 <details>
-<summary><strong>Aggregate Functions (11)</strong></summary>
+<summary><strong>Aggregate Functions (10)</strong></summary>
 
 `COUNT(*)`/`COUNT(col)`/`COUNT(DISTINCT col)`, `SUM`, `AVG`, `MIN`, `MAX`, `STRING_AGG`/`GROUP_CONCAT`, `STDDEV_POP`, `STDDEV_SAMP`, `VAR_POP`, `VAR_SAMP`
 </details>
@@ -276,7 +276,7 @@ ANALYZE accounts;
 </details>
 
 <details>
-<summary><strong>Conditional & Utility (6)</strong></summary>
+<summary><strong>Conditional & Utility (7)</strong></summary>
 
 `COALESCE`, `NULLIF`, `GREATEST`, `LEAST`, `IF`/`IIF`, `TYPEOF`, `CAST`
 </details>
@@ -457,7 +457,7 @@ Expression AST with full precedence parsing, `WHERE` clauses, `UPDATE`/`DELETE`,
 <details>
 <summary><strong>v0.3 — Storage & Performance</strong></summary>
 
-Multi-level compaction (L0–L7), block and index caching (LRU), prefix compression, write-batch API, SIMD-accelerated bloom probes (`--features simd`).
+Multi-level compaction (L0–L6), block and index caching (LRU), prefix compression, write-batch API, SIMD-accelerated bloom probes (`--features simd`).
 </details>
 
 <details>
@@ -615,9 +615,11 @@ spectradb/
 │   │       ├── sql/             # Parser, executor, evaluator, planner, vectorized engine
 │   │       ├── facet/           # Relational, FTS, time-series, vector search, event sourcing, schema evolution
 │   │       ├── cluster/         # Raft consensus, replication, scaling, membership
+│   │       ├── auth/            # Authentication, RBAC, session management
+│   │       ├── cdc/             # Change data capture, durable cursors, consumer groups
 │   │       ├── io/              # io_uring async I/O (optional)
 │   │       ├── ledger/          # Key encoding with bitemporal metadata
-│   │       └── util/            # Bloom filters, varint, checksums
+│   │       └── util/            # Varint encoding, metrics, time utilities
 │   ├── spectradb-cli/           # Interactive shell and CLI commands
 │   ├── spectradb-server/        # PostgreSQL wire protocol server (pgwire)
 │   ├── spectradb-native/        # Optional C++ acceleration (cxx)
