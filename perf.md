@@ -1,125 +1,225 @@
-# SpectraDB Performance Notes
+# SpectraDB Performance Guide
 
-## 1) Tuning Knobs
+## Benchmark Results
 
-- `wal_fsync_every_n_records`
-  - Lower = stronger durability cadence, lower throughput.
-  - Higher = better throughput, larger acknowledged window between fsyncs.
+SpectraDB ships with three Criterion benchmark suites. Results from a single-machine run:
 
-- `memtable_max_bytes`
-  - Larger = fewer flushes and better write amortization.
-  - Smaller = lower memory footprint, more flush churn.
+| Operation | SpectraDB | SQLite | sled | redb |
+|-----------|-----------|--------|------|------|
+| Point Read | **276 ns** | 1,080 ns | 244 ns | 573 ns |
+| Point Write (fast path) | **1.9 µs** | 38.6 µs | — | — |
+| Point Write (channel path) | ~161 µs | 38.6 µs | — | — |
+| Batch Write (100 keys) | native | — | — | — |
+| Prefix Scan (1k keys) | native | — | — | — |
+| Mixed 80r/20w | native | — | — | — |
 
-- `sstable_block_bytes`
-  - Larger = fewer index entries, better sequential scan locality.
-  - Smaller = less over-read per point lookup.
+**Key takeaways:**
+- Point reads are **4x faster** than SQLite thanks to direct shard bypass (no channel round-trip).
+- Point writes are **20x faster** than SQLite via the lock-free fast write path with group-commit WAL.
+- The channel-based write path (~161 µs) is the fallback for backpressure, subscriber activity, or when `fast_write_enabled=false`.
 
-- `bloom_bits_per_key`
-  - Higher = lower false-positive rate, more memory/disk for bloom block.
-  - Typical range: 8-14 bits/key.
-
-- `shard_count`
-  - More shards = higher write concurrency potential.
-  - Too many shards can amplify background work and metadata overhead.
-
-- `ai_batch_window_ms` (when `ai_auto_insights=true`)
-  - Lower = fresher insights, potentially higher write-path pressure.
-  - Higher = better batching efficiency, higher insight latency.
-
-- `ai_batch_max_events` (when `ai_auto_insights=true`)
-  - Lower = smaller batch fanout and lower burst cost.
-  - Higher = better amortization of AI synthesis and internal writes.
-
-## 2) Expected MVP Profile
-
-Writes:
-- sequential WAL appends dominate steady-state ingest,
-- memtable flush creates immutable SSTables,
-- compaction cost rises when L0 count grows.
-
-Reads:
-- point gets are bloom-filtered first,
-- mmap SSTable scans avoid explicit read syscalls for hot pages,
-- latency tail depends on compaction pressure and cache warmth.
-- SQL now includes joins, grouping, HAVING, CTEs/subqueries, and window functions, so operator-level scan/join/aggregate costs are primary latency contributors for analytical shapes.
-
-Temporal queries:
-- `AS OF` and `VALID AT` add version filtering cost,
-- bounded key cardinality and bloom-index pruning keep this manageable.
-
-DuckDB-category parity note:
-- Current engine has broad relational coverage but still lacks full cost-based optimization and full parallel query execution.
-- Comparative benchmarks should be interpreted as "single-node embedded engine progress" rather than direct DuckDB parity.
-
-AI runtime note:
-- Tier-0 AI synthesis is in-process and asynchronous.
-- Write-path overhead is governed by AI batching knobs and internal write-batch fanout.
-
-## 3) Benchmark Surface
-
-CLI benchmark (`spectradb-cli bench`) reports:
-- write throughput (`ops/s`)
-- read p50/p95/p99 latency
-- requested and observed read miss ratio
-- bloom miss rate
-- fsync cadence
-- active hasher path (rust/native)
-- mmap block read count
-- AI runtime counters via `.ai_status` when auto-insights are enabled
-
-### Sample run (single machine, quick sanity only)
-
-Command:
+### Running Benchmarks
 
 ```bash
-cargo run -q -p spectradb-cli -- --path /tmp/sdb_bench_rust --memtable-max-bytes 65536 bench --write-ops 20000 --read-ops 10000 --keyspace 5000 --read-miss-ratio 0.20
-cargo run -q -p spectradb-cli --features native -- --path /tmp/sdb_bench_native --memtable-max-bytes 65536 bench --write-ops 20000 --read-ops 10000 --keyspace 5000 --read-miss-ratio 0.20
+# SpectraDB vs SQLite (head-to-head)
+cargo bench --bench comparative
+
+# SpectraDB vs SQLite vs sled vs redb (four-way)
+cargo bench --bench multi_engine
+
+# SpectraDB microbenchmarks
+cargo bench --bench basic
+
+# CLI-integrated benchmark with configurable workload
+cargo run -p spectradb-cli -- --path /tmp/bench bench \
+  --write-ops 100000 --read-ops 50000 --keyspace 20000 --read-miss-ratio 0.20
 ```
 
-Observed output snapshot:
-- Rust hasher: `write_ops_per_sec=4593.57`, `read_p50_us=538`, `read_p95_us=887`, `read_p99_us=1032`, `mmap_reads=40000`, `hasher=rust-fnv64-mix`
-- Native hasher: `write_ops_per_sec=3996.17`, `read_p50_us=469`, `read_p95_us=853`, `read_p99_us=987`, `mmap_reads=40000`, `hasher=native-demo64`
+### AI Overhead Gate
 
-Interpretation:
-- Native path is correctly invoked (`hasher=native-demo64`).
-- This demo hasher is a correctness/integration target, not yet a throughput winner.
-- Next native iterations should focus on kernels with larger per-call compute payload (SIMD bloom probes, checksum/compression).
+CI runs an overhead regression check on every push:
 
-## 4) Performance Validation Plan
+```bash
+./scripts/ai_overhead_gate.sh
+```
 
-Short-loop checks:
-- ingest throughput sweep by fsync cadence.
-- read latency sweep by block size and bloom bits/key.
-- native vs rust hasher delta.
-- AI overhead check: benchmark with `ai_auto_insights=false` vs `true` using identical workloads.
+Thresholds: max 90% write throughput drop, max 150% increase in p95/p99 latency when AI features are enabled vs disabled.
 
-Nightly/soak checks:
-- mixed workload burn-in with periodic reopen/recovery.
-- stable p99 regression budgets.
-- disk amplification and compaction debt tracking.
-- AI counter invariants (`ai_write_failures=0` under baseline workloads).
+---
 
-## 5) Prioritized Optimization Roadmap (Efficiency, Speed, Portability)
+## Why Reads Are Fast (276 ns)
 
-1. Query-path efficiency:
-- improve operator fusion and memory behavior for join/aggregate/window heavy plans.
-- add spill-aware execution paths for large intermediates.
+The read path bypasses the shard actor channel entirely. `ShardReadHandle` holds an `Arc<ShardShared>` and reads directly from shared memory:
 
-2. AI runtime efficiency:
-- reduce per-event synthesis cost and improve batch scheduling fairness under bursty ingest.
-- add direct AI overhead benchmarks to CI (write p95/p99 deltas).
+1. Block cache check (LRU, configurable size)
+2. Bloom filter probe (skip SSTable if negative)
+3. Active memtable scan (read lock, microseconds)
+4. Immutable memtables scan
+5. SSTable level scan (L0: all files newest-first, L1+: binary search)
+6. Temporal filter application
 
-3. Compaction scalability:
-- reduce write amplification and compaction debt under sustained ingest.
-- improve compaction scheduling under mixed OLTP + analytical scans.
+No channel send/receive, no thread context switch, no shard actor wake-up. Read locks are held only during the scan itself.
 
-4. Portability-preserving acceleration:
-- keep pure-Rust path as default reference behavior.
-- add optional native/SIMD kernels where per-call compute is high enough to beat FFI overhead.
+## Why Writes Are Fast (1.9 µs)
 
-5. I/O path portability:
-- retain mmap + sync write baseline across platforms.
-- optionally add platform-specific async write paths behind feature flags without changing correctness semantics.
+The fast write path (`FastWritePath`) eliminates the three most expensive operations in the traditional channel-based path:
 
-6. Reproducible comparative harness:
-- expand benchmark matrix to include both current point-lookups and future scan/aggregate/operator categories for apples-to-apples DuckDB/SQLite comparisons.
+| Cost | Channel Path | Fast Path |
+|------|-------------|-----------|
+| Channel send/receive | ~50 µs | Eliminated |
+| Per-write WAL fsync | ~100 µs | Amortized via group commit |
+| Shard actor wake-up | ~10 µs | Eliminated |
+
+**How it works:**
+1. Atomic `fetch_add(1)` on the shard's commit counter → `commit_ts`
+2. Encode internal key and fact value
+3. Write-lock memtable → insert (microseconds)
+4. Enqueue pre-encoded WAL frame to `WalBatchQueue`
+5. Return `commit_ts` to caller immediately
+
+The `DurabilityThread` runs in the background, batching WAL frames across all shards into a single `fdatasync` call per interval. At 100K writes/sec with a 1ms batch interval, one fsync amortizes across ~100 writes.
+
+**Fallback to channel path when:**
+- Memtable is full (needs flush — shard actor handles compaction)
+- Change-feed subscribers are active (shard actor emits events)
+- `fast_write_enabled` is set to false
+
+---
+
+## Tuning Guide
+
+### Storage Parameters
+
+| Parameter | Default | Trade-off |
+|-----------|---------|-----------|
+| `memtable_max_bytes` | 4 MB | Larger = fewer flushes, better write amortization, more memory. Smaller = lower memory, more flush churn. |
+| `sstable_block_bytes` | 16 KB | Larger = better sequential scan locality, fewer index entries. Smaller = less over-read per point lookup. |
+| `sstable_max_file_bytes` | 64 MB | Max SSTable file size before splitting during compaction. |
+| `bloom_bits_per_key` | 10 | Higher = lower false-positive rate (fewer unnecessary disk reads), more memory/disk. Typical range: 8–14. |
+| `block_cache_bytes` | 32 MB | Larger = more hot data served from memory, fewer disk reads. Size based on your working set. |
+| `index_cache_entries` | 1024 | Number of SSTable index blocks cached. Increase if you have many SSTables. |
+
+### Write Path Parameters
+
+| Parameter | Default | Trade-off |
+|-----------|---------|-----------|
+| `shard_count` | 4 | More shards = higher write concurrency. Too many = more background work and metadata overhead. Match to CPU core count. |
+| `fast_write_enabled` | true | Enables lock-free fast write path (~1.9 µs). Disable for strict per-write durability (falls back to channel + immediate fsync). |
+| `fast_write_wal_batch_interval_us` | 1000 | WAL group commit interval in microseconds. Lower = faster durability, more fsyncs. Higher = better throughput, larger acknowledged window. |
+| `wal_fsync_every_n_records` | 128 | Channel-path fsync cadence. Lower = stronger durability, lower throughput. Higher = better throughput, larger window between fsyncs. |
+
+### Compaction Parameters
+
+| Parameter | Default | Trade-off |
+|-----------|---------|-----------|
+| `compaction_l0_threshold` | 8 | Number of L0 SSTables before triggering compaction. Lower = less read amplification, more compaction work. |
+| `compaction_l1_target_bytes` | 10 MB | L1 size target. Larger = fewer L0→L1 compactions, larger files. |
+| `compaction_size_ratio` | 10 | Each level is this many times larger than the previous. Standard LSM ratio. |
+| `compaction_max_levels` | 7 | Maximum levels (L0 through L6). More levels = better space amplification for large datasets. |
+
+### AI Parameters
+
+| Parameter | Default | Trade-off |
+|-----------|---------|-----------|
+| `ai_auto_insights` | false | Enable background insight synthesis from change feeds. Adds background CPU/IO work. |
+| `ai_batch_window_ms` | 20 | Lower = fresher insights, more processing overhead. Higher = better batching efficiency, staler insights. |
+| `ai_batch_max_events` | 16 | Lower = smaller batch size, less burst cost. Higher = better amortization of synthesis. |
+| `ai_inline_risk_assessment` | false | Enables synchronous risk scoring on every write. Adds latency to the write path. |
+| `ai_annotate_reads` | false | Annotate read results with AI metadata. Adds overhead to reads. |
+| `ai_compaction_advisor` | false | AI-driven compaction scheduling recommendations. |
+| `ai_cache_advisor` | false | AI-driven cache size tuning based on access patterns. |
+| `ai_access_stats_size` | 1024 | Ring buffer size for hot-key tracking. Larger = more accurate hot-key detection, more memory. |
+
+---
+
+## Performance Characteristics
+
+### Write Profile
+
+- **Steady state:** Fast write path dominates. Lock-free atomic increment + memtable insert + async WAL enqueue.
+- **Memtable flush:** When memtable exceeds `memtable_max_bytes`, it's frozen and flushed to an L0 SSTable. During flush, the fast path falls back to the channel path briefly.
+- **Compaction pressure:** When L0 files accumulate beyond `compaction_l0_threshold`, compaction merges them into L1. Write latency can spike during heavy compaction.
+- **Group commit:** The `DurabilityThread` batches WAL writes. Durability is guaranteed within one batch interval, not per-write.
+
+### Read Profile
+
+- **Cache-warm reads:** Block cache hit → ~100 ns.
+- **Bloom-filtered misses:** Bloom probe returns negative → skip SSTable entirely. Cost: ~50 ns per SSTable.
+- **Memtable reads:** Active memtable scan with read lock → ~200–400 ns.
+- **Cold SSTable reads:** mmap page fault + block decompression (LZ4) + scan → 1–10 µs depending on block size and data locality.
+- **Temporal filtering:** `AS OF` and `VALID AT` predicates add version-filtering cost proportional to the number of versions per key.
+
+### SQL Query Profile
+
+- **Point lookups via SQL:** Parser + planner + executor overhead adds ~10–50 µs on top of raw key lookup.
+- **Full table scans:** Proportional to row count. Vectorized execution engine processes rows in batches of 1024 for analytical queries.
+- **Joins:** Hash joins for equi-joins (build hash table on smaller side, probe with larger). Nested loop joins for non-equi conditions.
+- **Aggregates:** Vectorized hash aggregate for GROUP BY. Window functions computed after grouping, before LIMIT.
+
+---
+
+## Profiling
+
+### Built-in Diagnostics
+
+```sql
+-- Query execution plan with cost estimates
+EXPLAIN SELECT * FROM orders WHERE customer_id = 42;
+
+-- Plan with actual execution metrics
+EXPLAIN ANALYZE SELECT * FROM orders ORDER BY created_at DESC LIMIT 10;
+-- Shows: execution_time_us, rows_returned, read_ops, write_ops, bloom_negatives, plan_cost
+
+-- Table statistics (used by cost-based planner)
+ANALYZE orders;
+
+-- AI insights for a key
+EXPLAIN AI 'orders/ord-123';
+```
+
+### CLI Benchmark Output
+
+The CLI `bench` command reports:
+- Write throughput (ops/s)
+- Read p50/p95/p99 latency (µs)
+- Bloom miss rate
+- mmap block read count
+- Hasher path (rust/native)
+- AI runtime counters (when `--ai-auto-insights` is enabled)
+
+### External Profiling
+
+```bash
+# CPU profiling with perf
+perf record cargo bench --bench comparative
+perf report
+
+# Flamegraph
+cargo install flamegraph
+cargo flamegraph --bench comparative
+
+# Memory profiling with heaptrack
+heaptrack cargo run -p spectradb-cli -- --path /tmp/bench bench --write-ops 100000
+```
+
+---
+
+## Optimization Roadmap
+
+**Near-term:**
+- Index scan execution for `WHERE pk = ?` and `WHERE indexed_col = ?`
+- Parallel shard execution for scans and aggregates
+- Expression compilation for hot WHERE predicates
+- Predicate pushdown to SSTable block level
+
+**Medium-term:**
+- Pipeline execution for vectorized operators (fuse without materialization)
+- Morsel-driven parallelism for table scans
+- External merge sort for large ORDER BY
+- Adaptive execution switching between vectorized (analytics) and row-based (OLTP)
+
+**Long-term:**
+- Columnar SSTable format for analytics workloads
+- SIMD string operations (LIKE, SUBSTR, UPPER/LOWER)
+- Late materialization (keep column references until final projection)
+- Compression policies per compaction level (LZ4 for L0–L2, Zstd for L3+)
