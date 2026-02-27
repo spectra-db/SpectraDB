@@ -1078,6 +1078,7 @@ fn execute_stmt(db: &Database, session: &mut SqlSession, stmt: Statement) -> Res
         Statement::ExplainAnalyze(inner) => execute_explain_analyze(db, session, *inner),
         Statement::ExplainAi { key } => execute_explain_ai(db, session, &key),
         Statement::Analyze { table } => execute_analyze(db, session, &table),
+        Statement::Ask { question } => execute_ask(db, &question),
     }
 }
 
@@ -2915,6 +2916,45 @@ fn compute_column_stats(
             }
         })
         .collect()
+}
+
+// ==================== ASK (NL → SQL) ====================
+
+fn execute_ask(db: &Database, question: &str) -> Result<SqlResult> {
+    #[cfg(feature = "llm")]
+    {
+        let (sql, result) = db.ask(question)?;
+        // Wrap the result: first row is the generated SQL, then the actual result rows
+        match result {
+            SqlResult::Rows(rows) => {
+                let mut out = Vec::with_capacity(rows.len() + 1);
+                let header = serde_json::json!({ "__generated_sql": sql });
+                out.push(serde_json::to_vec(&header).unwrap_or_default());
+                out.extend(rows);
+                Ok(SqlResult::Rows(out))
+            }
+            SqlResult::Affected {
+                rows,
+                commit_ts,
+                message,
+            } => Ok(SqlResult::Affected {
+                rows,
+                commit_ts,
+                message: format!("-- Generated SQL: {sql}\n{message}"),
+            }),
+            SqlResult::Explain(text) => Ok(SqlResult::Explain(format!(
+                "-- Generated SQL: {sql}\n{text}"
+            ))),
+        }
+    }
+    #[cfg(not(feature = "llm"))]
+    {
+        let _ = question;
+        let _ = db;
+        Err(crate::error::SpectraError::FeatureNotEnabled(
+            "llm".to_string(),
+        ))
+    }
 }
 
 // ==================== Full-Text Search Functions ====================

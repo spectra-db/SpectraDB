@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 
-/// Global metrics registry for SpectraDB.
+/// Global metrics registry for TensorDB.
 pub struct MetricsRegistry {
     counters: Mutex<Vec<(String, Arc<AtomicU64>)>>,
     gauges: Mutex<Vec<(String, Arc<AtomicU64>)>>,

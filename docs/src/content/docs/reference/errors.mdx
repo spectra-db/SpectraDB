@@ -2,10 +2,10 @@
 draft: false
 head: []
 title: Error Reference
-description: SpectraDB error types and handling.
+description: TensorDB error types and handling.
 ---
 
-SpectraDB uses the `SpectraError` enum for all error conditions.
+TensorDB uses the `SpectraError` enum for all error conditions.
 
 ## Error Types
 
@@ -34,7 +34,7 @@ pub enum SpectraError {
 ## Handling Errors
 
 ```rust
-use spectradb::{Database, Config, SpectraError};
+use tensordb::{Database, Config, SpectraError};
 
 match db.sql("SELECT * FROM nonexistent", &[]) {
     Ok(results) => println!("{:?}", results),
@@ -60,4 +60,4 @@ match db.sql("SELECT * FROM nonexistent", &[]) {
 pub type Result<T> = std::result::Result<T, SpectraError>;
 ```
 
-All SpectraDB functions return `spectradb::Result<T>`, which is an alias for `std::result::Result<T, SpectraError>`.
+All TensorDB functions return `tensordb::Result<T>`, which is an alias for `std::result::Result<T, SpectraError>`.

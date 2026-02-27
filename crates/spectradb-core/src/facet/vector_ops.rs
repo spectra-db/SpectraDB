@@ -1,10 +1,10 @@
-//! Vector Search SQL Surface — SQL-accessible vector operations for SpectraDB.
+//! Vector Search SQL Surface — SQL-accessible vector operations for TensorDB.
 //!
 //! # The Innovation
-//! This module bridges SpectraDB's native vector search engine with its SQL surface,
+//! This module bridges TensorDB's native vector search engine with its SQL surface,
 //! enabling vector similarity queries to be expressed as standard SQL statements.
 //! Unlike pgvector (which bolts vector ops onto PostgreSQL) or standalone vector DBs
-//! (Pinecone, Milvus), SpectraDB unifies vector search, bitemporal time-travel, and
+//! (Pinecone, Milvus), TensorDB unifies vector search, bitemporal time-travel, and
 //! SQL in a single engine. The result: queries like
 //!
 //! ```sql

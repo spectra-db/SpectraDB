@@ -2,21 +2,21 @@
 draft: false
 head: []
 title: Node.js Bindings
-description: Using SpectraDB from Node.js with napi-rs bindings.
+description: Using TensorDB from Node.js with napi-rs bindings.
 ---
 
-SpectraDB provides Node.js bindings via napi-rs, enabling JavaScript and TypeScript applications to use the database.
+TensorDB provides Node.js bindings via napi-rs, enabling JavaScript and TypeScript applications to use the database.
 
 ## Installation
 
 ```bash
-npm install spectradb
+npm install tensordb
 ```
 
 ## Quick Start
 
 ```javascript
-const { Database } = require('spectradb');
+const { Database } = require('tensordb');
 
 // Open a database
 const db = Database.open('my_data');
@@ -35,7 +35,7 @@ console.log(results);
 ## TypeScript
 
 ```typescript
-import { Database, Config, Value } from 'spectradb';
+import { Database, Config, Value } from 'tensordb';
 
 const db = Database.open('my_data');
 
@@ -77,7 +77,7 @@ const db = Database.open('my_data', config);
 ## Building from Source
 
 ```bash
-cd crates/spectradb-node
+cd crates/tensordb-node
 npm install
 npm run build
 ```

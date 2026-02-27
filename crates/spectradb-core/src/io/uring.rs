@@ -5,7 +5,7 @@
 //! - `UringWalWriter`: batched WAL writes with IORING_OP_WRITE + IORING_OP_FSYNC
 //! - `UringBlockReader`: async block reads from SSTables
 //!
-//! When this feature is not enabled, SpectraDB uses standard synchronous I/O.
+//! When this feature is not enabled, TensorDB uses standard synchronous I/O.
 
 use std::fs::File;
 use std::os::unix::io::AsRawFd;

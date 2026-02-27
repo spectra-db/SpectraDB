@@ -2,10 +2,10 @@
 draft: false
 head: []
 title: Read Path
-description: How SpectraDB serves reads — from cache hits through bloom filters to SSTable lookups.
+description: How TensorDB serves reads — from cache hits through bloom filters to SSTable lookups.
 ---
 
-SpectraDB's read path is optimized for low latency with the `ShardReadHandle` that bypasses the shard actor channel entirely.
+TensorDB's read path is optimized for low latency with the `ShardReadHandle` that bypasses the shard actor channel entirely.
 
 ## Direct Read Path
 
@@ -61,7 +61,7 @@ If multiple versions exist, they're merged with the latest `commit_ts` winning (
 
 ## Prefix Scans
 
-For range queries, SpectraDB scans all keys with a common prefix:
+For range queries, TensorDB scans all keys with a common prefix:
 
 ```rust
 let results = db.scan_prefix("user/alice/")?;

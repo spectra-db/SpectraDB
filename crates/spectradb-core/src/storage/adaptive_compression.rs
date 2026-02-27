@@ -6,7 +6,7 @@
 //! numeric columns compress better with delta+RLE, and already-compressed data wastes CPU.
 //!
 //! # The Innovation
-//! SpectraDB analyzes each block's entropy profile BEFORE choosing a codec:
+//! TensorDB analyzes each block's entropy profile BEFORE choosing a codec:
 //! - Low entropy (repetitive data) → RLE encoding (near-zero CPU)
 //! - Medium entropy (structured text) → LZ4 (fast, good ratio)
 //! - High entropy (random/pre-compressed) → No compression (skip the CPU cost)
@@ -20,7 +20,7 @@
 //! # Why This Is Novel
 //! - RocksDB: configurable compression per level, but same codec for all blocks in a level
 //! - PostgreSQL: TOAST compression (pglz) with no per-tuple selection
-//! - SpectraDB: per-block AI-selected codec based on entropy profile
+//! - TensorDB: per-block AI-selected codec based on entropy profile
 
 /// Codec identifiers stored in the block header.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

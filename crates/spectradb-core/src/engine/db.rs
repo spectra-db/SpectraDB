@@ -93,6 +93,8 @@ pub struct Database {
     shard_handles: Vec<JoinHandle<()>>,
     fast_write: Option<Arc<FastWritePath>>,
     durability_thread: Option<DurabilityThread>,
+    #[cfg(feature = "llm")]
+    llm: Option<Arc<crate::ai::llm::LlmEngine>>,
 }
 
 impl Database {
@@ -224,6 +226,23 @@ impl Database {
             (None, None)
         };
 
+        #[cfg(feature = "llm")]
+        let llm = {
+            let model_path = if let Some(ref p) = config.llm_model_path {
+                PathBuf::from(p)
+            } else {
+                // Auto-discover model alongside the database root
+                root.join(".local/models/Qwen3-0.6B-Q8_0.gguf")
+            };
+            if model_path.exists() {
+                let engine = crate::ai::llm::LlmEngine::new(model_path)
+                    .with_max_tokens(config.llm_max_tokens);
+                Some(Arc::new(engine))
+            } else {
+                None
+            }
+        };
+
         Ok(Self {
             root,
             config,
@@ -235,6 +254,8 @@ impl Database {
             shard_handles,
             fast_write,
             durability_thread,
+            #[cfg(feature = "llm")]
+            llm,
         })
     }
 
@@ -411,6 +432,73 @@ impl Database {
     /// can be executed repeatedly without re-parsing.
     pub fn prepare(&self, sql: &str) -> Result<PreparedStatement> {
         PreparedStatement::new(sql)
+    }
+
+    /// Translate a natural language question to SQL using the embedded LLM,
+    /// then execute the generated SQL. Returns `(generated_sql, result)`.
+    #[cfg(feature = "llm")]
+    pub fn ask(&self, question: &str) -> Result<(String, SqlResult)> {
+        let llm = self.llm.as_ref().ok_or(SpectraError::LlmNotAvailable)?;
+
+        let schema = self.gather_schema_context()?;
+        let sql = llm.nl_to_sql(question, &schema)?;
+        let result = self.sql(&sql)?;
+        Ok((sql, result))
+    }
+
+    /// Translate a natural language question to SQL using the embedded LLM.
+    /// Returns only the generated SQL without executing it.
+    #[cfg(feature = "llm")]
+    pub fn ask_sql(&self, question: &str) -> Result<String> {
+        let llm = self.llm.as_ref().ok_or(SpectraError::LlmNotAvailable)?;
+
+        let schema = self.gather_schema_context()?;
+        llm.nl_to_sql(question, &schema)
+    }
+
+    /// Build a schema context string for the LLM prompt by listing all tables
+    /// and their column definitions.
+    #[cfg(feature = "llm")]
+    fn gather_schema_context(&self) -> Result<String> {
+        use crate::sql::exec::SqlResult;
+
+        let mut ctx = String::new();
+
+        // Get table list
+        let tables_result = self.sql("SHOW TABLES")?;
+        let table_names: Vec<String> = match tables_result {
+            SqlResult::Rows(rows) => rows
+                .into_iter()
+                .filter_map(|row| {
+                    serde_json::from_slice::<serde_json::Value>(&row)
+                        .ok()
+                        .and_then(|v| v.get("table").and_then(|t| t.as_str()).map(String::from))
+                        .or_else(|| String::from_utf8(row).ok())
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+
+        for table in &table_names {
+            let describe_sql = format!("DESCRIBE {table}");
+            if let Ok(desc) = self.sql(&describe_sql) {
+                ctx.push_str(&format!("Table: {table}\n"));
+                if let SqlResult::Rows(rows) = desc {
+                    for row in rows {
+                        if let Ok(text) = String::from_utf8(row) {
+                            ctx.push_str(&format!("  {text}\n"));
+                        }
+                    }
+                }
+                ctx.push('\n');
+            }
+        }
+
+        if ctx.is_empty() {
+            ctx.push_str("(no tables exist yet)\n");
+        }
+
+        Ok(ctx)
     }
 
     pub fn ai_stats(&self) -> AiRuntimeStats {

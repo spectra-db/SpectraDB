@@ -23,7 +23,7 @@
 //! - SQLite/RocksDB: synchronous WAL before visibility
 //! - PostgreSQL: WAL + shared buffer pool, still synchronous commit
 //! - Bitcask/LMDB: synchronous write before return
-//! - SpectraDB: **visibility before durability**, with clean rollback semantics
+//! - TensorDB: **visibility before durability**, with clean rollback semantics
 //!
 //! This is similar to "optimistic concurrency" but applied to the write path itself.
 //! The key insight: most writes succeed (disk failures are rare), so we optimize

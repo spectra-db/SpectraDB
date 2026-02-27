@@ -2,10 +2,10 @@
 draft: false
 head: []
 title: MVCC & Snapshot Isolation
-description: How SpectraDB provides multi-version concurrency control with snapshot reads.
+description: How TensorDB provides multi-version concurrency control with snapshot reads.
 ---
 
-SpectraDB provides **MVCC (Multi-Version Concurrency Control)** through its append-only architecture. Since data is never overwritten, multiple versions of every key coexist naturally.
+TensorDB provides **MVCC (Multi-Version Concurrency Control)** through its append-only architecture. Since data is never overwritten, multiple versions of every key coexist naturally.
 
 ## How MVCC Works
 
@@ -49,7 +49,7 @@ SELECT * FROM users WHERE id = 'alice' AS OF 3;
 
 ## Comparison with Traditional MVCC
 
-| Feature | SpectraDB | Traditional (PostgreSQL) |
+| Feature | TensorDB | Traditional (PostgreSQL) |
 |---------|-----------|------------------------|
 | Version storage | Permanent (ledger) | Temporary (vacuum cleans old versions) |
 | Write mechanism | Append-only | In-place update with undo log |
@@ -73,4 +73,4 @@ Commit timestamps are **shard-local**, not globally ordered. Cross-shard orderin
 
 ## Version Preservation
 
-Unlike traditional databases, SpectraDB **never drops versions** during compaction. All temporal versions are preserved permanently. This is a fundamental design choice — history is a feature, not overhead.
+Unlike traditional databases, TensorDB **never drops versions** during compaction. All temporal versions are preserved permanently. This is a fundamental design choice — history is a feature, not overhead.

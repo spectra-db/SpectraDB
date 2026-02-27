@@ -1,6 +1,6 @@
 //! AI-Native Database Example
 //!
-//! Demonstrates SpectraDB's AI runtime features: automatic insight synthesis,
+//! Demonstrates TensorDB's AI runtime features: automatic insight synthesis,
 //! change feed monitoring, and query advisors.
 //!
 //! Run with: `cargo run --example ai_native`
@@ -113,7 +113,7 @@ fn main() -> spectradb::Result<()> {
     }
 
     println!("\n=== Key Takeaway ===");
-    println!("SpectraDB is AI-native: the AI runtime participates in");
+    println!("TensorDB is AI-native: the AI runtime participates in");
     println!("query planning, risk assessment, and insight synthesis.");
     println!("Every operation feeds the AI — no external integration needed.\n");
 

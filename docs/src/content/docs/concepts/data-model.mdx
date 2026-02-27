@@ -2,14 +2,14 @@
 draft: false
 head: []
 title: Data Model
-description: Understanding SpectraDB's immutable fact model — keys, values, commit timestamps, and temporal metadata.
+description: Understanding TensorDB's immutable fact model — keys, values, commit timestamps, and temporal metadata.
 ---
 
-SpectraDB's data model is built on **immutable facts**. There are no UPDATE or DELETE operations that modify existing data — instead, new facts are written that supersede previous ones.
+TensorDB's data model is built on **immutable facts**. There are no UPDATE or DELETE operations that modify existing data — instead, new facts are written that supersede previous ones.
 
 ## Facts
 
-Every write to SpectraDB creates a fact with five components:
+Every write to TensorDB creates a fact with five components:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -47,7 +47,7 @@ The `commit_ts` is stored in big-endian format so that keys sort in temporal ord
 
 ## SQL Tables
 
-When you use SQL, SpectraDB maps table operations to the fact model:
+When you use SQL, TensorDB maps table operations to the fact model:
 
 - **Table metadata** is stored under `__meta/table/<name>` keys
 - **Table rows** are stored under `table/<name>/<pk>` keys
@@ -75,4 +75,4 @@ INSERT INTO users (id, name) VALUES ('u1', 'Alice v2');
 -- Use AS OF to read older versions.
 ```
 
-This is why SpectraDB is called a **ledger** — the complete history is always preserved.
+This is why TensorDB is called a **ledger** — the complete history is always preserved.

@@ -277,6 +277,10 @@ pub enum Statement {
     Analyze {
         table: String,
     },
+    /// `ASK '<natural language question>'` — translates NL to SQL via embedded LLM
+    Ask {
+        question: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -506,6 +510,11 @@ impl Parser {
         }
         if self.peek_kw("COPY") {
             return self.parse_copy();
+        }
+        if self.peek_kw("ASK") {
+            self.expect_kw("ASK")?;
+            let question = self.expect_string()?;
+            return Ok(Statement::Ask { question });
         }
         Err(SpectraError::SqlParse(
             "unsupported SQL statement".to_string(),

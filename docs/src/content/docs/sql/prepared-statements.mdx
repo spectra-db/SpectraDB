@@ -5,12 +5,12 @@ title: Prepared Statements
 description: Parameterized SQL queries with $1, $2, ... placeholders.
 ---
 
-SpectraDB supports prepared statements with positional parameter placeholders (`$1`, `$2`, ...) for safe, efficient parameterized queries.
+TensorDB supports prepared statements with positional parameter placeholders (`$1`, `$2`, ...) for safe, efficient parameterized queries.
 
 ## Usage
 
 ```rust
-use spectradb::Value;
+use tensordb::Value;
 
 // Parameterized query
 let results = db.sql(

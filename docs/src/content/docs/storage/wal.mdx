@@ -2,7 +2,7 @@
 draft: false
 head: []
 title: Write-Ahead Log (WAL)
-description: SpectraDB's crash-safe WAL with CRC framing and configurable fsync.
+description: TensorDB's crash-safe WAL with CRC framing and configurable fsync.
 ---
 
 The Write-Ahead Log (WAL) is the first point of persistence for every write. No write is acknowledged until it's been appended to the WAL.
@@ -37,7 +37,7 @@ The `DurabilityThread` batches WAL writes across all shards:
 
 ## Crash Recovery
 
-On startup, SpectraDB replays each shard's WAL from the last checkpoint:
+On startup, TensorDB replays each shard's WAL from the last checkpoint:
 
 1. Read WAL records sequentially
 2. Verify CRC for each record

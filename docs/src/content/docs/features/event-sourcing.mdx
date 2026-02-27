@@ -2,19 +2,19 @@
 draft: false
 head: []
 title: Event Sourcing
-description: Using SpectraDB as an event store for event-sourced architectures.
+description: Using TensorDB as an event store for event-sourced architectures.
 ---
 
-SpectraDB's append-only, immutable architecture makes it a natural fit for event sourcing.
+TensorDB's append-only, immutable architecture makes it a natural fit for event sourcing.
 
 ## What is Event Sourcing?
 
 Instead of storing current state, you store a sequence of events. The current state is derived by replaying events.
 
-## SpectraDB as an Event Store
+## TensorDB as an Event Store
 
 ```rust
-use spectradb::Value;
+use tensordb::Value;
 
 // Append events
 db.put("account/acc-001/events/1", Value::Text(

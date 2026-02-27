@@ -1,4 +1,4 @@
-# SpectraDB Test Plan
+# TensorDB Test Plan
 
 ## Goals
 
@@ -163,7 +163,7 @@ Collect per run:
 
 ## Baseline Comparisons
 
-The benchmark suites compare SpectraDB against:
+The benchmark suites compare TensorDB against:
 
 - **SQLite** — Point read, point write, prefix scan, mixed workload
 - **sled** — Point read, point write, batch write, prefix scan, mixed workload

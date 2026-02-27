@@ -1,21 +1,21 @@
-//! Vector Search — AI-native semantic similarity search for SpectraDB.
+//! Vector Search — AI-native semantic similarity search for TensorDB.
 //!
 //! # The Innovation
-//! SpectraDB integrates vector similarity search directly into its storage engine,
+//! TensorDB integrates vector similarity search directly into its storage engine,
 //! making it the first bitemporal database with native vector search. This enables:
 //! - "Find documents similar to X, AS OF timestamp T" — temporal vector queries
 //! - "Track how document similarity changed over time" — bitemporal vector analysis
 //! - AI-driven index selection between exact search (small sets) and HNSW (large sets)
 //!
 //! # Architecture
-//! - Vectors are stored as regular SpectraDB facts with a special encoding
+//! - Vectors are stored as regular TensorDB facts with a special encoding
 //! - An in-memory HNSW (Hierarchical Navigable Small World) graph provides fast ANN search
 //! - The AI advisor monitors query patterns and auto-tunes HNSW parameters
 //!
 //! # Why This Is Novel
 //! - pgvector: Vector search bolted onto PostgreSQL, no temporal dimension
 //! - Pinecone/Milvus: Purpose-built vector DBs, no SQL or bitemporal support
-//! - SpectraDB: Native vector search with bitemporal time-travel queries
+//! - TensorDB: Native vector search with bitemporal time-travel queries
 
 use std::collections::{BinaryHeap, HashMap};
 use std::sync::atomic::{AtomicU64, Ordering};

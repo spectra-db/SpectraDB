@@ -34,6 +34,10 @@ pub enum SpectraError {
     ChannelClosed,
     #[error("feature not enabled: {0}")]
     FeatureNotEnabled(String),
+    #[error("LLM not available (no model loaded)")]
+    LlmNotAvailable,
+    #[error("LLM error: {0}")]
+    LlmError(String),
 }
 
 pub type Result<T> = std::result::Result<T, SpectraError>;

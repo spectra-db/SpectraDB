@@ -2,15 +2,15 @@
 draft: false
 head: []
 title: Vector Search
-description: Native vector similarity search in SpectraDB for AI/ML and RAG applications.
+description: Native vector similarity search in TensorDB for AI/ML and RAG applications.
 ---
 
-SpectraDB includes native vector similarity search, enabling AI/ML applications to store and query embeddings directly in the database.
+TensorDB includes native vector similarity search, enabling AI/ML applications to store and query embeddings directly in the database.
 
 ## Storing Vectors
 
 ```rust
-use spectradb::Value;
+use tensordb::Value;
 
 // Store a 384-dimensional embedding
 let embedding = vec![0.1, 0.05, -0.23, /* ... 384 dims */];
@@ -31,8 +31,8 @@ CREATE TABLE documents (
 -- Insert with vector data
 INSERT INTO documents VALUES (
     'doc1',
-    'Introduction to SpectraDB',
-    'SpectraDB is a bitemporal...',
+    'Introduction to TensorDB',
+    'TensorDB is a bitemporal...',
     VECTOR([0.1, 0.05, -0.23, ...])
 );
 ```

@@ -1,6 +1,6 @@
 //! Bitemporal Ledger Example
 //!
-//! Shows how SpectraDB tracks both system time (when data was recorded) and
+//! Shows how TensorDB tracks both system time (when data was recorded) and
 //! business time (when data was valid), enabling regulatory compliance,
 //! audit trails, and "what did we know and when" queries.
 //!

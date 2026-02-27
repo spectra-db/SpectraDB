@@ -1,14 +1,15 @@
 [package]
 name = "spectradb-cli"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-description = "Interactive CLI shell for SpectraDB with TAB completion, output modes, and AI features"
+description = "Interactive CLI shell for TensorDB with TAB completion, output modes, and AI features"
 license = "PolyForm-Noncommercial-1.0.0"
-repository = "https://github.com/spectra-db/SpectraDB"
+repository = "https://github.com/tensor-db/tensorDB"
 
 [features]
-default = []
+default = ["llm"]
 native = ["spectradb-core/native"]
+llm = ["spectradb-core/llm"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

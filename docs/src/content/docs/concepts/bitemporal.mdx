@@ -2,12 +2,12 @@
 draft: false
 head: []
 title: Bitemporal Model
-description: Understanding system time and business time — the two temporal dimensions in SpectraDB.
+description: Understanding system time and business time — the two temporal dimensions in TensorDB.
 ---
 
 import TimelineVisual from '../../../components/TimelineVisual.astro';
 
-SpectraDB is a **bitemporal** database. Every fact exists in two independent time dimensions:
+TensorDB is a **bitemporal** database. Every fact exists in two independent time dimensions:
 
 1. **System time** (`commit_ts`) — when the database recorded the fact
 2. **Business time** (`valid_from` / `valid_to`) — when the fact was true in the real world
@@ -52,7 +52,7 @@ SELECT rate FROM policies VALID AT 1718409600;
 ### Writing with Business Time
 
 ```rust
-use spectradb::Value;
+use tensordb::Value;
 
 // Record a rate valid from Jan 1 to Jun 30, 2024
 db.put_temporal(

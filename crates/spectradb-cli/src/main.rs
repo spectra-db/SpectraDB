@@ -20,7 +20,7 @@ use spectradb_core::{
 
 #[derive(Parser, Debug)]
 #[command(name = "spectradb")]
-#[command(about = "SpectraDB CLI")]
+#[command(about = "TensorDB CLI")]
 struct Cli {
     #[arg(long, default_value = "./data")]
     path: String,
@@ -198,6 +198,7 @@ impl ReplHelper {
                 "BEGIN".to_string(),
                 "COMMIT".to_string(),
                 "ROLLBACK".to_string(),
+                "ASK".to_string(),
             ],
             meta_commands: vec![
                 ".help".to_string(),
@@ -515,6 +516,20 @@ fn run_shell(
                         }
                         continue;
                     }
+
+                    // Natural language query: # how many users?
+                    if let Some(after_hash) = trimmed.strip_prefix('#') {
+                        let question = after_hash.trim();
+                        if question.is_empty() {
+                            continue;
+                        }
+                        let _ = editor.add_history_entry(trimmed);
+                        handle_nl_query(db, question, mode)?;
+                        if let Some(h) = editor.helper_mut() {
+                            h.refresh_catalog(db);
+                        }
+                        continue;
+                    }
                 }
 
                 pending_sql.push_str(&line);
@@ -673,6 +688,38 @@ fn handle_meta_command(
     }
 
     Ok(ShellAction::Continue)
+}
+
+#[cfg(feature = "llm")]
+fn handle_nl_query(db: &Database, question: &str, mode: OutputMode) -> Result<()> {
+    match db.ask_sql(question) {
+        Ok(sql) => {
+            println!("\n  Generated SQL: {sql}");
+            print!("  Execute? [Y/n] ");
+            let _ = io::stdout().flush();
+            let mut answer = String::new();
+            if io::stdin().read_line(&mut answer).is_ok() {
+                let answer = answer.trim().to_ascii_lowercase();
+                if answer.is_empty() || answer == "y" || answer == "yes" {
+                    if let Err(e) = execute_and_print_sql(db, &sql, mode) {
+                        eprintln!("error: {e}");
+                    }
+                } else {
+                    println!("  Skipped.");
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("  NL→SQL error: {e}");
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(feature = "llm"))]
+fn handle_nl_query(_db: &Database, _question: &str, _mode: OutputMode) -> Result<()> {
+    eprintln!("  NL→SQL not available (llm feature not enabled)");
+    Ok(())
 }
 
 fn execute_and_print_sql(db: &Database, query: &str, mode: OutputMode) -> Result<()> {
@@ -974,7 +1021,7 @@ fn is_sql_statement_complete(sql: &str) -> bool {
 }
 
 fn print_shell_welcome(mode: OutputMode, timer: bool) {
-    println!("SpectraDB Interactive Shell");
+    println!("TensorDB Interactive Shell");
     println!("type .help for commands; terminate SQL statements with ';'");
     println!(
         "mode={} timer={}",
@@ -998,6 +1045,9 @@ fn print_shell_help() {
     println!("  .mode <table|line|json>   set output format");
     println!("  .timer [on|off]           toggle or set per-query timing");
     println!("  .clear                    clear screen");
+    println!();
+    println!("  # <question>              ask in natural language (AI translates to SQL)");
+    println!("  ASK '<question>';         ask via SQL (AI translates to SQL and executes)");
     println!();
     println!("tips:");
     println!("  - autocomplete with TAB for SQL keywords, meta commands, and table names");

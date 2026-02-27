@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/spectradb-logo.svg" alt="SpectraDB" width="560">
+  <img src="assets/tensordb-logo.svg" alt="TensorDB" width="560">
 </p>
 
 <p align="center">
@@ -7,20 +7,20 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/spectra-db/SpectraDB/actions"><img src="https://github.com/spectra-db/SpectraDB/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/tensor-db/tensorDB/actions"><img src="https://github.com/tensor-db/tensorDB/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm--Noncommercial-blue.svg" alt="License: PolyForm Noncommercial"></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/rust-stable-orange.svg" alt="Rust"></a>
 </p>
 
 ---
 
-SpectraDB is an embedded database written in Rust that treats every write as an immutable fact. It separates **system time** (when data was recorded) from **business-valid time** (when data was true), giving you built-in time travel and auditability with zero application-level bookkeeping.
+TensorDB is an embedded database written in Rust that treats every write as an immutable fact. It separates **system time** (when data was recorded) from **business-valid time** (when data was true), giving you built-in time travel and auditability with zero application-level bookkeeping.
 
 **41,000+ lines of Rust** | **224+ integration tests** | **30 test suites** | **7 workspace crates**
 
 ## Performance
 
-| Operation | SpectraDB | SQLite | sled | redb |
+| Operation | TensorDB | SQLite | sled | redb |
 |-----------|-----------|--------|------|------|
 | Point Read | **276 ns** | 1,080 ns | 244 ns | 573 ns |
 | Point Write | **1.9 µs** | 38.6 µs | — | — |
@@ -35,8 +35,8 @@ SpectraDB is an embedded database written in Rust that treats every write as an 
 Benchmarks use Criterion 0.5. Run them yourself:
 
 ```bash
-cargo bench --bench comparative    # SpectraDB vs SQLite
-cargo bench --bench multi_engine   # SpectraDB vs SQLite vs sled vs redb
+cargo bench --bench comparative    # TensorDB vs SQLite
+cargo bench --bench multi_engine   # TensorDB vs SQLite vs sled vs redb
 cargo bench --bench basic          # Microbenchmarks
 ```
 
@@ -68,7 +68,7 @@ cargo bench --bench basic          # Microbenchmarks
 ### Data Platform
 - **Change Data Capture** — Prefix-filtered subscriptions, durable cursors, consumer groups with rebalancing.
 - **Data Interchange** — `COPY TO/FROM` CSV, JSON, Parquet. Table functions: `read_csv()`, `read_json()`, `read_parquet()`.
-- **PostgreSQL Wire Protocol** — `spectradb-server` crate accepts Postgres client connections via pgwire.
+- **PostgreSQL Wire Protocol** — `tensordb-server` crate accepts Postgres client connections via pgwire.
 - **Authentication & RBAC** — User management, role-based access control, table-level permissions, session management.
 - **Connection Pooling** — Configurable pool with warmup, idle eviction, and RAII connection guards.
 
@@ -80,9 +80,9 @@ cargo bench --bench basic          # Microbenchmarks
 - **`EXPLAIN AI`** — SQL command for AI insights, provenance, and risk scores per key.
 
 ### Language Bindings & Integrations
-- **Rust** — Native embedded library (`spectradb-core`).
-- **Python** — PyO3 bindings (`spectradb-python`) — `open()`, `put()`, `get()`, `sql()`.
-- **Node.js** — napi-rs bindings (`spectradb-node`) — `open()`, `put()`, `get()`, `sql()`.
+- **Rust** — Native embedded library (`tensordb-core`).
+- **Python** — PyO3 bindings (`tensordb-python`) — `open()`, `put()`, `get()`, `sql()`.
+- **Node.js** — napi-rs bindings (`tensordb-node`) — `open()`, `put()`, `get()`, `sql()`.
 - **Interactive CLI** — TAB completion, persistent history, table/line/JSON output modes.
 - **Optional C++ Acceleration** — `--features native` via `cxx` for Hasher, Compressor, BloomProbe.
 - **Optional io_uring** — `--features io-uring` for Linux async I/O.
@@ -135,6 +135,19 @@ Immutable append-only storage with bitemporal queries satisfies audit and compli
 </tr>
 </table>
 
+## Install
+
+```bash
+# Python
+pip install tensordb
+
+# Node.js
+npm install tensordb
+
+# Rust
+cargo add spectradb
+```
+
 ## Quickstart
 
 ```bash
@@ -144,14 +157,14 @@ cargo run --example bitemporal     # Bitemporal ledger: AS OF + VALID AT queries
 cargo run --example ai_native      # AI runtime: insights, risk scoring, query planning
 
 # Build and launch interactive shell
-cargo build -p spectradb-cli
-cargo run -p spectradb-cli -- --path ./mydb
+cargo build -p tensordb-cli
+cargo run -p tensordb-cli -- --path ./mydb
 
 # Launch with AI auto-insights enabled
-cargo run -p spectradb-cli -- --path ./mydb --ai-auto-insights
+cargo run -p tensordb-cli -- --path ./mydb --ai-auto-insights
 
 # Start PostgreSQL wire protocol server
-cargo run -p spectradb-server -- --data-dir ./mydb --port 5433
+cargo run -p tensordb-server -- --data-dir ./mydb --port 5433
 ```
 
 ```sql
@@ -283,7 +296,7 @@ ANALYZE accounts;
 
 ## Architecture
 
-SpectraDB is organized around three core principles: **immutable truth** (the append-only ledger), **temporal indexing** (bitemporal metadata on every fact), and **faceted queries** (pluggable query planes over the same data).
+TensorDB is organized around three core principles: **immutable truth** (the append-only ledger), **temporal indexing** (bitemporal metadata on every fact), and **faceted queries** (pluggable query planes over the same data).
 
 ```mermaid
 graph TB
@@ -408,7 +421,7 @@ graph TB
 
 ## Configuration
 
-SpectraDB is configured through the `Config` struct. All parameters have sensible defaults.
+TensorDB is configured through the `Config` struct. All parameters have sensible defaults.
 
 <details>
 <summary><strong>All 22 Configuration Parameters</strong></summary>
@@ -511,7 +524,7 @@ Cost-based query planner (`PlanNode` tree), `EXPLAIN ANALYZE` with execution met
 <details>
 <summary><strong>v0.15 — PostgreSQL Wire Protocol</strong></summary>
 
-`spectradb-server` crate with pgwire v3 protocol, simple and extended query modes, type OID mapping, password authentication. Connect with any PostgreSQL client.
+`tensordb-server` crate with pgwire v3 protocol, simple and extended query modes, type OID mapping, password authentication. Connect with any PostgreSQL client.
 </details>
 
 <details>
@@ -605,9 +618,9 @@ See the full roadmap with per-version feature tracking in the [design.md](design
 ## Project Structure
 
 ```
-spectradb/
+tensordb/
 ├── crates/
-│   ├── spectradb-core/          # Database engine (main crate, ~31k lines)
+│   ├── tensordb-core/           # Database engine (main crate, ~31k lines)
 │   │   └── src/
 │   │       ├── ai/              # AI runtime, inference, ML pipeline, advisors
 │   │       ├── engine/          # Database, shard, fast write path, change feeds
@@ -620,11 +633,11 @@ spectradb/
 │   │       ├── io/              # io_uring async I/O (optional)
 │   │       ├── ledger/          # Key encoding with bitemporal metadata
 │   │       └── util/            # Varint encoding, metrics, time utilities
-│   ├── spectradb-cli/           # Interactive shell and CLI commands
-│   ├── spectradb-server/        # PostgreSQL wire protocol server (pgwire)
-│   ├── spectradb-native/        # Optional C++ acceleration (cxx)
-│   ├── spectradb-python/        # Python bindings (PyO3 / maturin)
-│   └── spectradb-node/          # Node.js bindings (napi-rs)
+│   ├── tensordb-cli/            # Interactive shell and CLI commands
+│   ├── tensordb-server/         # PostgreSQL wire protocol server (pgwire)
+│   ├── tensordb-native/         # Optional C++ acceleration (cxx)
+│   ├── tensordb-python/         # Python bindings (PyO3 / maturin)
+│   └── tensordb-node/           # Node.js bindings (napi-rs)
 ├── tests/                       # 224+ integration tests across 30 suites
 ├── benches/                     # Criterion benchmarks (basic, comparative, multi-engine)
 ├── examples/                    # quickstart.rs, bitemporal.rs, ai_native.rs
@@ -683,10 +696,10 @@ cargo bench --bench basic
 ./scripts/ai_overhead_gate.sh
 
 # Build Python bindings
-cd crates/spectradb-python && maturin develop
+cd crates/tensordb-python && maturin develop
 
 # Build Node.js bindings
-cd crates/spectradb-node && npm run build
+cd crates/tensordb-node && npm run build
 
 # Build documentation site
 cd docs && npm install && npm run build
@@ -705,4 +718,4 @@ We welcome contributions. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before 
 
 ## License
 
-SpectraDB is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). You may use it freely for personal, educational, research, and non-commercial purposes. Commercial use requires a paid license — contact walebadr@users.noreply.github.com.
+TensorDB is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). You may use it freely for personal, educational, research, and non-commercial purposes. Commercial use requires a paid license — contact walebadr@users.noreply.github.com.

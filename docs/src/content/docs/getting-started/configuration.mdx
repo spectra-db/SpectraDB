@@ -2,17 +2,17 @@
 draft: false
 head: []
 title: Configuration
-description: Complete reference for SpectraDB configuration parameters with interactive explorer.
+description: Complete reference for TensorDB configuration parameters with interactive explorer.
 ---
 
 import ConfigExplorer from '../../../components/ConfigExplorer.astro';
 
-SpectraDB is configured through the `Config` struct. All parameters have sensible defaults — you can start with `Config::default()` and tune as needed.
+TensorDB is configured through the `Config` struct. All parameters have sensible defaults — you can start with `Config::default()` and tune as needed.
 
 ## Basic Usage
 
 ```rust
-use spectradb::{Database, Config};
+use tensordb::{Database, Config};
 
 // Use defaults
 let db = Database::open("data", Config::default())?;
@@ -76,14 +76,14 @@ config.ai_access_stats_size = 4096;  // Track more keys
 
 ## Validation
 
-SpectraDB validates configuration at startup. Invalid configurations return a `SpectraError::Config` error:
+TensorDB validates configuration at startup. Invalid configurations return a `SpectraError::Config` error:
 
 ```rust
 let mut config = Config::default();
 config.memtable_max_bytes = 100;  // Too small! Must be >= 1024
 
 match Database::open("data", config) {
-    Err(spectradb::SpectraError::Config(msg)) => {
+    Err(tensordb::SpectraError::Config(msg)) => {
         eprintln!("Invalid config: {}", msg);
     }
     _ => {}
