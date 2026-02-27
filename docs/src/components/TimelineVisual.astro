@@ -1,6 +1,5 @@
 ---
 // Bitemporal timeline visualization
-// Shows two timelines (system time and business time) with fact events and query range highlights
 ---
 
 <div class="timeline-container">
@@ -103,12 +102,12 @@
   .timeline-title {
     font-size: 1.3rem;
     font-weight: 700;
-    color: var(--sl-color-white);
+    color: var(--spectra-text);
     margin-bottom: 0.5rem;
   }
   .timeline-explanation {
     font-size: 0.95rem;
-    color: var(--sl-color-gray-3);
+    color: var(--spectra-text-muted);
     line-height: 1.6;
     margin-bottom: 2rem;
   }
@@ -121,7 +120,7 @@
     gap: 2.5rem;
   }
   .timeline-section {
-    background: rgba(15, 23, 42, 0.5);
+    background: var(--spectra-card-bg);
     border: 1px solid var(--spectra-card-border);
     border-radius: 12px;
     padding: 1.5rem;
@@ -166,12 +165,12 @@
   }
   .timeline-event-label {
     font-size: 0.7rem;
-    color: var(--sl-color-gray-3);
+    color: var(--spectra-text-muted);
     margin-top: 0.5rem;
     white-space: nowrap;
   }
   .timeline-event-label small {
-    color: var(--sl-color-gray-4);
+    color: var(--spectra-text-faint);
   }
   .timeline-query-highlight {
     position: absolute;
@@ -195,7 +194,7 @@
     justify-content: space-between;
     margin-top: 0.5rem;
     font-size: 0.7rem;
-    color: var(--sl-color-gray-4);
+    color: var(--spectra-text-faint);
   }
   .timeline-range {
     position: absolute;
@@ -213,11 +212,11 @@
   .timeline-range-bar.rate3 { background: var(--spectra-emerald); }
   .timeline-range-label {
     font-size: 0.7rem;
-    color: var(--sl-color-gray-3);
+    color: var(--spectra-text-muted);
     margin-top: 0.3rem;
   }
   .timeline-range-label small {
-    color: var(--sl-color-gray-4);
+    color: var(--spectra-text-faint);
   }
   .timeline-valid-marker {
     position: absolute;
@@ -244,7 +243,7 @@
   .timeline-note {
     margin-top: 1rem;
     font-size: 0.85rem;
-    color: var(--sl-color-gray-3);
+    color: var(--spectra-text-muted);
     line-height: 1.5;
     padding: 0.75rem;
     background: rgba(59, 130, 246, 0.05);
@@ -270,7 +269,7 @@
   }
   .timeline-combined-desc {
     font-size: 0.9rem;
-    color: var(--sl-color-gray-3);
+    color: var(--spectra-text-muted);
     line-height: 1.6;
   }
   .timeline-combined-desc code {

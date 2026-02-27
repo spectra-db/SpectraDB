@@ -1,6 +1,5 @@
 ---
 // Architecture diagram for SpectraDB
-// Shows: Client → Database → Shards → WAL/Memtable → SSTable Levels
 ---
 
 <div class="arch-diagram">
@@ -100,7 +99,7 @@
       <div class="arch-compaction-label">← Compaction merges levels →</div>
     </div>
 
-    <!-- Read Path (side) -->
+    <!-- Read Path -->
     <div class="arch-layer arch-read-path">
       <div class="arch-path-label">Read Path</div>
       <div class="arch-pipeline">
@@ -144,7 +143,7 @@
 
 <style>
   .arch-diagram {
-    background: #0F172A;
+    background: var(--spectra-dark);
     border-radius: 12px;
     padding: 2rem;
     border: 1px solid var(--spectra-card-border);
@@ -154,7 +153,7 @@
     text-align: center;
     font-size: 1.2rem;
     font-weight: 700;
-    color: var(--sl-color-white);
+    color: var(--spectra-text);
     margin-bottom: 2rem;
   }
   .arch-flow {
@@ -190,11 +189,11 @@
   .arch-node-label {
     font-weight: 600;
     font-size: 0.9rem;
-    color: var(--sl-color-white);
+    color: var(--spectra-text);
   }
   .arch-node-detail {
     font-size: 0.75rem;
-    color: var(--sl-color-gray-3);
+    color: var(--spectra-text-muted);
     margin-top: 0.2rem;
   }
   .arch-node.client { border-color: var(--spectra-blue); }
@@ -209,13 +208,13 @@
   .arch-node.ai-node { border-color: var(--spectra-violet); }
 
   .arch-arrow, .arch-arrow-split {
-    color: var(--sl-color-gray-4);
+    color: var(--spectra-text-faint);
     font-size: 1.2rem;
     padding: 0.2rem 0;
   }
   .arch-arrow-split span {
     font-size: 0.8rem;
-    color: var(--sl-color-gray-3);
+    color: var(--spectra-text-muted);
   }
   .arch-shards {
     display: flex;
@@ -229,7 +228,7 @@
     justify-content: center;
   }
   .arch-pipe {
-    color: var(--sl-color-gray-4);
+    color: var(--spectra-text-faint);
     font-size: 1.2rem;
   }
   .arch-path-label {
@@ -243,7 +242,7 @@
     letter-spacing: 0.05em;
   }
   .arch-write-path, .arch-read-path, .arch-storage, .arch-ai {
-    background: rgba(255,255,255,0.02);
+    background: var(--spectra-card-bg);
     border-radius: 10px;
     padding: 1rem;
     border: 1px dashed var(--spectra-card-border);
@@ -265,7 +264,7 @@
   .arch-level-label {
     font-size: 0.8rem;
     font-weight: 600;
-    color: var(--sl-color-gray-3);
+    color: var(--spectra-text-muted);
     width: 24px;
   }
   .arch-level-bar {
@@ -282,7 +281,7 @@
   .arch-compaction-label {
     text-align: center;
     font-size: 0.75rem;
-    color: var(--sl-color-gray-4);
+    color: var(--spectra-text-faint);
     margin-top: 0.5rem;
     font-style: italic;
   }

@@ -1,50 +1,70 @@
 /* =============================================================================
    SpectraDB Documentation — Custom Theme
-   A comprehensive, modern design system for the SpectraDB docs site.
-   Built on top of Astro Starlight CSS custom properties.
+   Dark-first design with full light mode support.
    ============================================================================= */
 
-/* ---------------------------------------------------------------------------
-   Google Fonts
-   --------------------------------------------------------------------------- */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* ---------------------------------------------------------------------------
-   Starlight CSS Custom Property Overrides
+   Core tokens (theme-agnostic)
    --------------------------------------------------------------------------- */
 :root {
-  /* Accent palette */
-  --sl-color-accent-low: #1e1b4b;
-  --sl-color-accent: #3B82F6;
-  --sl-color-accent-high: #93c5fd;
-
-  /* Neutral scale */
-  --sl-color-white: #ffffff;
-  --sl-color-gray-1: #f1f5f9;
-  --sl-color-gray-2: #e2e8f0;
-  --sl-color-gray-3: #94a3b8;
-  --sl-color-gray-4: #475569;
-  --sl-color-gray-5: #1e293b;
-  --sl-color-gray-6: #0f172a;
-  --sl-color-black: #020617;
-
-  /* Typography */
   --sl-font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --sl-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-
-  /* Content width — slightly wider than Starlight default */
   --sl-content-width: 55rem;
 
-  /* SpectraDB brand tokens */
+  /* Brand palette — same in both themes */
   --spectra-gradient: linear-gradient(135deg, #3B82F6, #8B5CF6);
   --spectra-blue: #3B82F6;
   --spectra-violet: #8B5CF6;
   --spectra-emerald: #10B981;
   --spectra-amber: #F59E0B;
+}
+
+/* ---------------------------------------------------------------------------
+   Dark theme (default)
+   --------------------------------------------------------------------------- */
+:root {
+  /* Starlight accent overrides */
+  --sl-color-accent-low: #1e1b4b;
+  --sl-color-accent: #3B82F6;
+  --sl-color-accent-high: #93c5fd;
+
+  /* Gray scale — CONTRAST-SAFE on dark backgrounds
+     gray-3 on #0f172a = ~10:1   (was ~4.6:1)
+     gray-4 on #0f172a = ~5.5:1  (was ~2.7:1)  */
+  --sl-color-white: #ffffff;
+  --sl-color-gray-1: #f1f5f9;
+  --sl-color-gray-2: #e2e8f0;
+  --sl-color-gray-3: #cbd5e1;
+  --sl-color-gray-4: #94a3b8;
+  --sl-color-gray-5: #1e293b;
+  --sl-color-gray-6: #0f172a;
+  --sl-color-black: #020617;
+
+  /* Semantic surface tokens */
   --spectra-dark: #0F172A;
-  --spectra-card-bg: rgba(255, 255, 255, 0.05);
-  --spectra-card-border: rgba(255, 255, 255, 0.1);
+  --spectra-surface: #1E293B;
+  --spectra-card-bg: rgba(255, 255, 255, 0.07);
+  --spectra-card-border: rgba(255, 255, 255, 0.15);
   --spectra-glow: 0 0 20px rgba(59, 130, 246, 0.3);
+  --spectra-text: #e2e8f0;
+  --spectra-text-muted: #cbd5e1;
+  --spectra-text-faint: #94a3b8;
+}
+
+/* ---------------------------------------------------------------------------
+   Light theme
+   --------------------------------------------------------------------------- */
+:root[data-theme='light'] {
+  --spectra-dark: #ffffff;
+  --spectra-surface: #f1f5f9;
+  --spectra-card-bg: rgba(15, 23, 42, 0.04);
+  --spectra-card-border: rgba(15, 23, 42, 0.12);
+  --spectra-glow: 0 0 20px rgba(59, 130, 246, 0.15);
+  --spectra-text: #1e293b;
+  --spectra-text-muted: #475569;
+  --spectra-text-faint: #64748b;
 }
 
 /* ---------------------------------------------------------------------------
@@ -65,22 +85,18 @@
   animation: hero-gradient 8s ease infinite;
 }
 
+:root[data-theme='light'] .hero-section {
+  background: linear-gradient(135deg, #eff6ff, #e0e7ff, #dbeafe, #eff6ff);
+  background-size: 400% 400%;
+  animation: hero-gradient 8s ease infinite;
+}
+
 @keyframes hero-gradient {
-  0% {
-    background-position: 0% 50%;
-  }
-  25% {
-    background-position: 100% 50%;
-  }
-  50% {
-    background-position: 100% 0%;
-  }
-  75% {
-    background-position: 0% 100%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
+  0% { background-position: 0% 50%; }
+  25% { background-position: 100% 50%; }
+  50% { background-position: 100% 0%; }
+  75% { background-position: 0% 100%; }
+  100% { background-position: 0% 50%; }
 }
 
 .hero-tagline {
@@ -88,7 +104,7 @@
   font-weight: 700;
   line-height: 1.15;
   margin-bottom: 1.5rem;
-  background: linear-gradient(135deg, #3B82F6, #8B5CF6);
+  background: var(--spectra-gradient);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -115,10 +131,14 @@
   line-height: 1.1;
 }
 
+:root[data-theme='light'] .hero-stat-number {
+  color: #0f172a;
+}
+
 .hero-stat-label {
   font-size: 0.85rem;
   font-weight: 500;
-  color: var(--sl-color-gray-3);
+  color: var(--spectra-text-muted);
   margin-top: 0.25rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -141,7 +161,7 @@
   font-weight: 700;
   font-size: 1rem;
   text-decoration: none;
-  color: var(--sl-color-white);
+  color: #ffffff;
   background: var(--spectra-gradient);
   transition: transform 0.25s ease, box-shadow 0.25s ease;
   box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);
@@ -153,8 +173,9 @@
 }
 
 .hero-cta a.secondary {
-  background: transparent;
+  background: var(--spectra-card-bg);
   border: 2px solid var(--spectra-card-border);
+  color: var(--spectra-text);
   box-shadow: none;
 }
 
@@ -175,17 +196,16 @@
 
 .feature-card {
   background: var(--spectra-card-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--spectra-card-border);
   border-radius: 16px;
   padding: 2rem;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
 }
 
 .feature-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 8px 32px rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
 .feature-card-icon {
@@ -198,20 +218,20 @@
   justify-content: center;
   font-size: 1.5rem;
   margin-bottom: 1rem;
-  color: var(--sl-color-white);
+  color: #ffffff;
 }
 
 .feature-card h3 {
   font-size: 1.15rem;
   font-weight: 600;
   margin-bottom: 0.5rem;
-  color: var(--sl-color-white);
+  color: var(--spectra-text);
 }
 
 .feature-card p {
   font-size: 0.9rem;
   line-height: 1.6;
-  color: var(--sl-color-gray-3);
+  color: var(--spectra-text-muted);
 }
 
 /* ---------------------------------------------------------------------------
@@ -220,14 +240,14 @@
 .code-tabs {
   border-radius: 12px;
   overflow: hidden;
-  background: #1E293B;
+  background: var(--spectra-surface);
   border: 1px solid var(--spectra-card-border);
   margin: 1.5rem 0;
 }
 
 .code-tabs-header {
   display: flex;
-  background: #0F172A;
+  background: var(--spectra-dark);
   border-bottom: 1px solid var(--spectra-card-border);
 }
 
@@ -235,7 +255,7 @@
   padding: 0.75rem 1.25rem;
   border: none;
   background: transparent;
-  color: var(--sl-color-gray-3);
+  color: var(--spectra-text-faint);
   font-family: var(--sl-font);
   font-size: 0.85rem;
   font-weight: 500;
@@ -245,7 +265,7 @@
 }
 
 .code-tab-button:hover {
-  color: var(--sl-color-gray-2);
+  color: var(--spectra-text);
 }
 
 .code-tab-button.active {
@@ -275,10 +295,10 @@
 }
 
 .perf-bar-label {
-  font-weight: 500;
+  font-weight: 600;
   margin-bottom: 0.5rem;
   font-size: 0.9rem;
-  color: var(--sl-color-gray-2);
+  color: var(--spectra-text);
 }
 
 .perf-bar {
@@ -292,47 +312,29 @@
 .perf-bar-fill {
   height: 100%;
   border-radius: 8px;
-  position: absolute;
-  left: 0;
-  top: 0;
-  animation: bar-grow 1.2s ease-out forwards;
-  transform-origin: left;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  min-width: 60px;
+  width: 0;
+  transition: width 1s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.perf-bar-fill.spectra {
-  background: var(--spectra-gradient);
+.perf-chart.animated .perf-bar-fill {
+  width: var(--bar-width);
 }
 
-.perf-bar-fill.sqlite {
-  background: #64748b;
-}
-
-.perf-bar-fill.sled {
-  background: #f59e0b;
-}
-
-.perf-bar-fill.redb {
-  background: #10b981;
-}
+.perf-bar-fill.spectra { background: var(--spectra-gradient); }
+.perf-bar-fill.sqlite { background: #64748b; }
+.perf-bar-fill.sled { background: #f59e0b; }
+.perf-bar-fill.redb { background: #10b981; }
 
 .perf-bar-value {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  color: var(--sl-color-white);
-  z-index: 1;
-}
-
-@keyframes bar-grow {
-  from {
-    transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(1);
-  }
+  color: #ffffff;
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------------------
@@ -342,7 +344,7 @@
   border-radius: 12px;
   border: 1px solid var(--spectra-card-border);
   overflow: hidden;
-  background: #0F172A;
+  background: var(--spectra-dark);
   margin: 1.5rem 0;
 }
 
@@ -351,13 +353,13 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #1E293B;
+  background: var(--spectra-surface);
   border-bottom: 1px solid var(--spectra-card-border);
 }
 
 .sql-playground-header select {
-  background: #0F172A;
-  color: var(--sl-color-white);
+  background: var(--spectra-dark);
+  color: var(--spectra-text);
   border: 1px solid var(--spectra-card-border);
   border-radius: 6px;
   padding: 0.4rem 0.8rem;
@@ -368,7 +370,7 @@
 .sql-run-btn {
   background: var(--spectra-gradient);
   border: none;
-  color: var(--sl-color-white);
+  color: #ffffff;
   padding: 0.5rem 1.2rem;
   border-radius: 6px;
   font-weight: 600;
@@ -386,7 +388,7 @@
   font-family: var(--sl-font-mono);
   white-space: pre;
   line-height: 1.6;
-  color: #e2e8f0;
+  color: var(--spectra-text);
   min-height: 120px;
   font-size: 0.9rem;
 }
@@ -414,12 +416,23 @@
   padding: 0.5rem 1rem;
   border-bottom: 1px solid var(--spectra-card-border);
   font-size: 0.85rem;
-  color: var(--sl-color-gray-2);
+  color: var(--spectra-text);
 }
 
 .sql-results tr:last-child td {
   border-bottom: none;
 }
+
+/* SQL syntax highlighting */
+.sql-kw { color: #7dd3fc; font-weight: 600; }
+.sql-str { color: #86efac; }
+.sql-num { color: #fbbf24; }
+.sql-cmt { color: #64748b; font-style: italic; }
+
+:root[data-theme='light'] .sql-kw { color: #2563eb; font-weight: 600; }
+:root[data-theme='light'] .sql-str { color: #16a34a; }
+:root[data-theme='light'] .sql-num { color: #d97706; }
+:root[data-theme='light'] .sql-cmt { color: #94a3b8; font-style: italic; }
 
 /* ---------------------------------------------------------------------------
    Config Explorer
@@ -428,27 +441,28 @@
   border-radius: 12px;
   border: 1px solid var(--spectra-card-border);
   overflow: hidden;
+  background: var(--spectra-card-bg);
   margin: 1.5rem 0;
 }
 
 .config-search {
   width: 100%;
   padding: 0.8rem 1.2rem;
-  background: #1E293B;
+  background: var(--spectra-surface);
   border: none;
   border-bottom: 1px solid var(--spectra-card-border);
-  color: var(--sl-color-white);
+  color: var(--spectra-text);
   font-size: 0.95rem;
   font-family: var(--sl-font);
   outline: none;
 }
 
 .config-search::placeholder {
-  color: var(--sl-color-gray-3);
+  color: var(--spectra-text-faint);
 }
 
 .config-search:focus {
-  background: #253349;
+  background: var(--spectra-dark);
 }
 
 .config-group {
@@ -469,7 +483,7 @@
 
 .config-item {
   padding: 0.75rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.08);
   display: grid;
   grid-template-columns: 1fr 120px auto;
   gap: 1rem;
@@ -483,7 +497,7 @@
 .config-item-name {
   font-family: var(--sl-font-mono);
   font-weight: 500;
-  color: #e2e8f0;
+  color: var(--spectra-text);
   font-size: 0.9rem;
 }
 
@@ -496,7 +510,7 @@
 .config-item-desc {
   grid-column: 1 / -1;
   font-size: 0.85rem;
-  color: var(--sl-color-gray-3);
+  color: var(--spectra-text-muted);
   margin-top: 0.25rem;
   line-height: 1.5;
 }
@@ -520,7 +534,7 @@
   position: absolute;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--sl-color-gray-3);
+  color: var(--spectra-text-muted);
 }
 
 .timeline-event {
@@ -540,7 +554,7 @@
   top: 20px;
   font-size: 0.7rem;
   white-space: nowrap;
-  color: var(--sl-color-gray-3);
+  color: var(--spectra-text-muted);
 }
 
 .timeline-query-range {
@@ -554,20 +568,15 @@
 }
 
 @keyframes pulse-dot {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
-  }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0); }
 }
 
 /* ---------------------------------------------------------------------------
    Architecture Diagram
    --------------------------------------------------------------------------- */
 .arch-diagram {
-  background: #0F172A;
+  background: var(--spectra-dark);
   border-radius: 12px;
   padding: 2rem;
   border: 1px solid var(--spectra-card-border);
@@ -578,55 +587,6 @@
 .arch-diagram svg {
   max-width: 100%;
   height: auto;
-}
-
-/* ---------------------------------------------------------------------------
-   Scroll Reveal Animations
-   --------------------------------------------------------------------------- */
-.reveal {
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
-}
-
-.reveal.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.reveal-stagger > * {
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
-}
-
-.reveal-stagger.visible > * {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.reveal-stagger > *:nth-child(1) {
-  transition-delay: 0.1s;
-}
-
-.reveal-stagger > *:nth-child(2) {
-  transition-delay: 0.2s;
-}
-
-.reveal-stagger > *:nth-child(3) {
-  transition-delay: 0.3s;
-}
-
-.reveal-stagger > *:nth-child(4) {
-  transition-delay: 0.4s;
-}
-
-.reveal-stagger > *:nth-child(5) {
-  transition-delay: 0.5s;
-}
-
-.reveal-stagger > *:nth-child(6) {
-  transition-delay: 0.6s;
 }
 
 /* ---------------------------------------------------------------------------
@@ -672,18 +632,11 @@
 /* ---------------------------------------------------------------------------
    Starlight Default Overrides
    --------------------------------------------------------------------------- */
-
-/* Remove conflicting Starlight heading decoration */
-starlight-head {
-  all: unset;
-}
-
-/* Smoother link colors */
 a {
   transition: color 0.2s ease;
 }
 
-/* Nicer inline code */
+/* Inline code styling */
 :not(pre) > code {
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.15);
@@ -692,13 +645,13 @@ a {
   font-size: 0.88em;
 }
 
-/* Make code blocks fit the theme */
+/* Code block borders */
 pre {
   border: 1px solid var(--spectra-card-border) !important;
   border-radius: 10px !important;
 }
 
-/* Table styling within Starlight content */
+/* Table styling */
 .sl-markdown-content table {
   border-collapse: collapse;
   width: 100%;
@@ -706,19 +659,25 @@ pre {
 }
 
 .sl-markdown-content th {
-  background: rgba(59, 130, 246, 0.08);
+  background: rgba(59, 130, 246, 0.12);
   border-bottom: 2px solid var(--spectra-blue);
   padding: 0.6rem 1rem;
   text-align: left;
   font-weight: 600;
+  color: var(--spectra-text);
 }
 
 .sl-markdown-content td {
   padding: 0.6rem 1rem;
   border-bottom: 1px solid var(--spectra-card-border);
+  color: var(--spectra-text-muted);
 }
 
-/* Sidebar refinements */
+.sl-markdown-content tr:hover {
+  background: var(--spectra-card-bg);
+}
+
+/* Active sidebar indicator */
 nav.sidebar a[aria-current='page'] {
   background: rgba(59, 130, 246, 0.1);
   border-left: 3px solid var(--spectra-blue);
@@ -732,36 +691,28 @@ nav.sidebar a[aria-current='page'] {
     min-height: 60vh;
     padding: 3rem 1.5rem;
   }
-
   .hero-tagline {
     font-size: clamp(1.6rem, 6vw, 2.4rem);
   }
-
   .hero-stats {
     flex-wrap: wrap;
     gap: 1.5rem;
   }
-
   .feature-grid {
     grid-template-columns: 1fr;
   }
-
   .config-item {
     grid-template-columns: 1fr;
   }
-
   .config-item-default {
     justify-self: start;
   }
-
   .perf-chart {
     max-width: 100%;
   }
-
   .arch-diagram {
     padding: 1rem;
   }
-
   .sql-playground-header {
     flex-direction: column;
     gap: 0.75rem;
@@ -774,26 +725,21 @@ nav.sidebar a[aria-current='page'] {
     flex-direction: column;
     align-items: stretch;
   }
-
   .hero-cta a {
     justify-content: center;
   }
-
   .code-tabs-header {
     flex-wrap: wrap;
   }
-
   .code-tab-button {
     flex: 1;
     text-align: center;
     padding: 0.6rem 0.75rem;
     font-size: 0.8rem;
   }
-
   .hero-stat-number {
     font-size: 2rem;
   }
-
   .feature-card {
     padding: 1.5rem;
   }
