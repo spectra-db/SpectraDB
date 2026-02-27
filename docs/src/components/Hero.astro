@@ -4,165 +4,132 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 <section class="hero-section">
   <div class="hero-content">
-    <div class="hero-badge">
-      <span class="badge">Open Source</span>
-      <span class="badge">Rust-Powered</span>
-      <span class="badge emerald">v0.28</span>
-    </div>
-    <h1 class="hero-tagline">The AI-Native<br/>Bitemporal Ledger Database</h1>
+    <h1 class="hero-tagline">The AI-Native<br/>Bitemporal Database</h1>
     <p class="hero-subtitle">
-      Append-only immutable storage with MVCC snapshot reads, SQL query surface,
-      LSM-tree engine, and embedded AI runtime. Every write is a fact. Every fact has a timeline.
+      Append-only immutable storage with MVCC snapshot reads, full SQL,
+      LSM-tree engine, and embedded AI runtime. Built in Rust.
     </p>
     <div class="hero-stats">
       <div class="hero-stat">
-        <span class="hero-stat-number" data-target="276">0</span>
-        <span class="hero-stat-unit">ns</span>
+        <span class="hero-stat-value">276<span class="hero-stat-unit">ns</span></span>
         <span class="hero-stat-label">Point Reads</span>
       </div>
       <div class="hero-stat">
-        <span class="hero-stat-number" data-target="1.9">0</span>
-        <span class="hero-stat-unit">µs</span>
+        <span class="hero-stat-value">1.9<span class="hero-stat-unit">µs</span></span>
         <span class="hero-stat-label">Point Writes</span>
       </div>
       <div class="hero-stat">
-        <span class="hero-stat-number" data-target="4">0</span>
-        <span class="hero-stat-unit">×</span>
-        <span class="hero-stat-label">Faster than SQLite reads</span>
+        <span class="hero-stat-value">4<span class="hero-stat-unit">×</span></span>
+        <span class="hero-stat-label">Faster reads vs SQLite</span>
       </div>
       <div class="hero-stat">
-        <span class="hero-stat-number" data-target="20">0</span>
-        <span class="hero-stat-unit">×</span>
-        <span class="hero-stat-label">Faster than SQLite writes</span>
+        <span class="hero-stat-value">20<span class="hero-stat-unit">×</span></span>
+        <span class="hero-stat-label">Faster writes vs SQLite</span>
       </div>
     </div>
     <div class="hero-cta">
-      <a href={`${base}/getting-started/quickstart/`} class="hero-btn primary">Get Started</a>
-      <a href={`${base}/sql/`} class="hero-btn secondary">SQL Reference</a>
-      <a href={`${base}/performance/benchmarks/`} class="hero-btn secondary">Benchmarks</a>
+      <a href={`${base}/getting-started/quickstart/`}>Get Started</a>
+      <a href={`${base}/sql/`} class="secondary">SQL Reference</a>
     </div>
   </div>
 </section>
 
-<script>
-  function animateCounters() {
-    const counters = document.querySelectorAll('.hero-stat-number[data-target]');
-    counters.forEach(counter => {
-      const target = parseFloat(counter.getAttribute('data-target') || '0');
-      const isFloat = target % 1 !== 0;
-      const duration = 1200;
-      const start = performance.now();
-
-      function step(now: number) {
-        const elapsed = now - start;
-        const progress = Math.min(elapsed / duration, 1);
-        const ease = 1 - Math.pow(1 - progress, 3);
-        const current = target * ease;
-        counter.textContent = isFloat ? current.toFixed(1) : Math.round(current).toString();
-        if (progress < 1) requestAnimationFrame(step);
-      }
-      requestAnimationFrame(step);
-    });
-  }
-
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        animateCounters();
-        observer.disconnect();
-      }
-    });
-  }, { threshold: 0.3 });
-
-  const heroSection = document.querySelector('.hero-section');
-  if (heroSection) observer.observe(heroSection);
-</script>
-
 <style>
-  .hero-content {
-    max-width: 800px;
-    text-align: center;
-    padding: 2rem;
-  }
-  .hero-badge {
+  .hero-section {
     display: flex;
-    gap: 0.5rem;
+    align-items: center;
     justify-content: center;
-    margin-bottom: 2rem;
-    flex-wrap: wrap;
+    text-align: center;
+    padding: 5rem 2rem 4rem;
+    background: var(--spectra-dark);
+  }
+  .hero-content {
+    max-width: 720px;
+  }
+  .hero-tagline {
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    font-weight: 700;
+    line-height: 1.15;
+    margin: 0 0 1.25rem;
+    background: var(--spectra-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
   .hero-subtitle {
-    font-size: 1.2rem;
+    font-size: 1.15rem;
     color: var(--spectra-text-muted);
     line-height: 1.7;
+    margin: 0 auto 2.5rem;
+    max-width: 560px;
+  }
+  .hero-stats {
+    display: flex;
+    gap: 2.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
     margin-bottom: 2.5rem;
-    max-width: 600px;
-    margin-left: auto;
-    margin-right: auto;
   }
   .hero-stat {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0;
   }
-  .hero-stat-number {
-    font-size: 2.5rem;
+  .hero-stat-value {
+    font-size: 2.2rem;
     font-weight: 700;
-    line-height: 1.1;
-    display: inline;
+    color: var(--spectra-text);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
   }
   .hero-stat-unit {
-    font-size: 1.5rem;
+    font-size: 1.2rem;
     font-weight: 500;
-    opacity: 0.7;
-    display: inline;
-  }
-  .hero-stat-number, .hero-stat-unit {
-    color: var(--sl-color-white);
-  }
-  :global([data-theme='light']) .hero-stat-number,
-  :global([data-theme='light']) .hero-stat-unit {
-    color: #0f172a;
+    opacity: 0.6;
   }
   .hero-stat-label {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 500;
-    color: var(--spectra-text-muted);
-    margin-top: 0.25rem;
+    color: var(--spectra-text-faint);
+    margin-top: 0.35rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
-  .hero-btn {
+  .hero-cta {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .hero-cta a {
     display: inline-flex;
     align-items: center;
-    padding: 0.75rem 1.5rem;
+    padding: 0.7rem 1.5rem;
     border-radius: 8px;
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     text-decoration: none;
-    transition: all 0.3s ease;
-  }
-  .hero-btn.primary {
     background: var(--spectra-gradient);
     color: #ffffff;
+    transition: transform 0.2s, box-shadow 0.2s;
   }
-  .hero-btn.primary:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--spectra-glow);
+  .hero-cta a:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
   }
-  .hero-btn.secondary {
-    background: var(--spectra-card-bg);
-    color: var(--spectra-text);
+  .hero-cta a.secondary {
+    background: transparent;
     border: 1px solid var(--spectra-card-border);
+    color: var(--spectra-text);
   }
-  .hero-btn.secondary:hover {
+  .hero-cta a.secondary:hover {
     border-color: var(--spectra-blue);
-    transform: translateY(-2px);
+    box-shadow: none;
   }
   @media (max-width: 480px) {
-    .hero-subtitle { font-size: 1rem; }
-    .hero-stat-number { font-size: 2rem; }
-    .hero-stat-unit { font-size: 1.2rem; }
+    .hero-section { padding: 3rem 1.5rem 2.5rem; }
+    .hero-stat-value { font-size: 1.8rem; }
+    .hero-stat-unit { font-size: 1rem; }
+    .hero-cta { flex-direction: column; align-items: center; }
   }
 </style>
