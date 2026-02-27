@@ -1,9 +1,15 @@
+pub mod adaptive_compression;
 pub mod bloom;
 pub mod cache;
 pub mod columnar;
 pub mod compaction;
+pub mod fractal_index;
 pub mod levels;
 pub mod manifest;
 pub mod memtable;
+pub mod predictive_prefetch;
+pub mod self_healing;
 pub mod sstable;
+pub mod temporal_bloom;
 pub mod wal;
+pub mod zone_map;

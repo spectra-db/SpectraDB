@@ -18,6 +18,12 @@ pub struct Config {
     pub sstable_max_file_bytes: u64,
     pub block_cache_bytes: usize,
     pub index_cache_entries: usize,
+    // AI-native core engine flags
+    pub ai_inline_risk_assessment: bool,
+    pub ai_annotate_reads: bool,
+    pub ai_compaction_advisor: bool,
+    pub ai_cache_advisor: bool,
+    pub ai_access_stats_size: usize,
 }
 
 impl Default for Config {
@@ -38,6 +44,11 @@ impl Default for Config {
             sstable_max_file_bytes: 64 * 1024 * 1024,
             block_cache_bytes: 32 * 1024 * 1024,
             index_cache_entries: 1024,
+            ai_inline_risk_assessment: false,
+            ai_annotate_reads: false,
+            ai_compaction_advisor: false,
+            ai_cache_advisor: false,
+            ai_access_stats_size: 1024,
         }
     }
 }

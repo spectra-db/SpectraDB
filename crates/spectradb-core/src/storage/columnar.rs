@@ -107,7 +107,7 @@ impl TypedValue {
 /// - Blob: varint(len) + raw_bytes
 pub fn encode_row(values: &[TypedValue]) -> Vec<u8> {
     let n_cols = values.len();
-    let bitmap_bytes = (n_cols + 7) / 8;
+    let bitmap_bytes = n_cols.div_ceil(8);
     let mut buf = vec![0u8; bitmap_bytes];
 
     // Set null bits
@@ -142,7 +142,7 @@ pub fn encode_row(values: &[TypedValue]) -> Vec<u8> {
 /// Decode a row of typed values from binary format.
 pub fn decode_row(data: &[u8], types: &[SqlType]) -> Result<Vec<TypedValue>> {
     let n_cols = types.len();
-    let bitmap_bytes = (n_cols + 7) / 8;
+    let bitmap_bytes = n_cols.div_ceil(8);
     if data.len() < bitmap_bytes {
         return Err(SpectraError::SqlExec("row data too short".into()));
     }
@@ -237,6 +237,7 @@ mod tests {
     fn roundtrip_typed_row() {
         let values = vec![
             TypedValue::Integer(42),
+            #[allow(clippy::approx_constant)]
             TypedValue::Real(3.14),
             TypedValue::Text("hello".into()),
             TypedValue::Boolean(true),

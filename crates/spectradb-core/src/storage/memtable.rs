@@ -1,8 +1,12 @@
 use std::collections::BTreeMap;
+use std::ops::Bound;
 
 use crate::error::Result;
 use crate::ledger::internal_key::{decode_internal_key, user_prefix_bounds};
 use crate::ledger::record::FactValue;
+
+/// Visible entry from a prefix scan: user_key → (commit_ts, doc).
+pub type PrefixVisibleMap = BTreeMap<Vec<u8>, (u64, Vec<u8>)>;
 
 #[derive(Clone, Default)]
 pub struct Memtable {
@@ -69,4 +73,62 @@ impl Memtable {
         }
         Ok(None)
     }
+
+    /// Prefix-bounded scan: returns visible entries for user keys starting with `prefix`.
+    /// Uses BTreeMap::range() for O(k log n) instead of O(n) full iteration.
+    pub fn scan_prefix_visible(
+        &self,
+        prefix: &[u8],
+        as_of: u64,
+        valid_at: Option<u64>,
+    ) -> Result<PrefixVisibleMap> {
+        let mut best: PrefixVisibleMap = BTreeMap::new();
+
+        let start = Bound::Included(prefix.to_vec());
+        let end = match prefix_successor(prefix) {
+            Some(succ) => Bound::Excluded(succ),
+            None => Bound::Unbounded,
+        };
+
+        for (internal_key, value) in self.map.range::<Vec<u8>, _>((start, end)) {
+            let decoded = decode_internal_key(internal_key)?;
+            if decoded.commit_ts > as_of {
+                continue;
+            }
+            if !decoded.user_key.starts_with(prefix) {
+                continue;
+            }
+
+            let fact = FactValue::decode(value)?;
+            if let Some(valid_ts) = valid_at {
+                if !(fact.valid_from <= valid_ts && valid_ts < fact.valid_to) {
+                    continue;
+                }
+            }
+
+            match best.get(decoded.user_key.as_slice()) {
+                Some((best_ts, _)) if *best_ts >= decoded.commit_ts => {}
+                _ => {
+                    best.insert(decoded.user_key, (decoded.commit_ts, fact.doc));
+                }
+            }
+        }
+
+        Ok(best)
+    }
+}
+
+/// Compute the successor of a byte prefix for range queries.
+/// Increments the last non-0xFF byte; truncates trailing 0xFF bytes.
+/// Returns None if the prefix is all 0xFF (meaning no upper bound).
+pub fn prefix_successor(prefix: &[u8]) -> Option<Vec<u8>> {
+    let mut succ = prefix.to_vec();
+    while let Some(last) = succ.last_mut() {
+        if *last < 0xFF {
+            *last += 1;
+            return Some(succ);
+        }
+        succ.pop();
+    }
+    None
 }

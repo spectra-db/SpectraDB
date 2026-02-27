@@ -2,7 +2,7 @@ use spectradb::{Config, Database};
 use tempfile::TempDir;
 
 fn padding(ch: char, len: usize) -> String {
-    std::iter::repeat(ch).take(len).collect()
+    std::iter::repeat_n(ch, len).collect()
 }
 
 #[test]

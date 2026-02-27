@@ -97,6 +97,11 @@ The full-text search facet provides tokenized, stemmed inverted indexes over doc
 ## Quickstart
 
 ```bash
+# Run examples
+cargo run --example quickstart     # Core features: SQL, time-travel, prepared statements
+cargo run --example bitemporal     # Bitemporal ledger: AS OF + VALID AT queries
+cargo run --example ai_native      # AI runtime: insights, risk scoring, query planning
+
 # Build
 cargo build -p spectradb-cli
 
@@ -413,8 +418,8 @@ Executable docs note:
 
 #### v0.10 — Query Engine Performance
 **Replace full-table scans with indexed execution. This is where 1000x speedups come from.**
-- [ ] Table statistics collection — track row count, distinct value count, min/max per column, value frequency histograms. Update on flush/compaction
-- [ ] Cost-based query planner — replace no-op `plan()` with cost estimator using table statistics. Choose between scan, index lookup, and join strategies
+- [x] Table statistics collection — track row count, distinct value count, min/max per column, value frequency histograms via `ANALYZE <table>`
+- [x] Cost-based query planner — real plan tree with `PlanNode` types (PointLookup, FullScan, Filter, HashJoin, Sort, Limit, Project) and cost estimation
 - [ ] Index scan execution — for queries with `WHERE pk = ?` or `WHERE indexed_col = ?`, use the index instead of full table scan
 - [ ] Composite index scans — multi-column indexes with prefix matching for `WHERE a = ? AND b = ?`
 - [ ] Index-only scans — if all SELECT columns are in the index, return directly without hitting data blocks
@@ -422,8 +427,8 @@ Executable docs note:
 - [ ] Sort-merge join — for pre-sorted inputs or when both sides have compatible indexes
 - [ ] Parallel shard execution — fan out scan/aggregate across shards on separate threads, merge results
 - [ ] External merge sort — for ORDER BY on datasets larger than `memtable_max_bytes`, spill to temp SSTables
-- [ ] `EXPLAIN ANALYZE` — show actual rows scanned, blocks read, cache hits, time per operator
-- [ ] Prepared statements — parse once, execute many with parameterized values. Cache query plans
+- [x] `EXPLAIN ANALYZE` — shows execution time, rows returned, read/write/bloom ops, and plan cost per operator
+- [x] Prepared statements — parse once, execute many with `$1, $2, ...` parameter binding and plan caching
 - [ ] Expression compilation — compile hot WHERE predicates to closure-based evaluation (skip interpreter overhead)
 
 ---
@@ -433,19 +438,19 @@ Executable docs note:
 #### v0.11 — Temporal SQL Standard (SQL:2011)
 **This is SpectraDB's killer differentiator. No embedded DB does this. Make it standards-compliant.**
 - [ ] `SYSTEM_TIME` period definition — `CREATE TABLE ... WITH SYSTEM VERSIONING` per SQL:2011
-- [ ] `FOR SYSTEM_TIME AS OF <timestamp>` — standard syntax alongside existing `AS OF`
-- [ ] `FOR SYSTEM_TIME FROM <t1> TO <t2>` — range query over system time
-- [ ] `FOR SYSTEM_TIME BETWEEN <t1> AND <t2>` — inclusive range
-- [ ] `APPLICATION_TIME` period definition — `PERIOD FOR valid_time (valid_from, valid_to)` column pairs
-- [ ] `FOR APPLICATION_TIME AS OF <t>` — application/business time point queries
-- [ ] `FOR APPLICATION_TIME FROM <t1> TO <t2>` — application time range queries
+- [x] `FOR SYSTEM_TIME AS OF <timestamp>` — standard syntax alongside existing `AS OF`
+- [x] `FOR SYSTEM_TIME FROM <t1> TO <t2>` — range query over system time
+- [x] `FOR SYSTEM_TIME BETWEEN <t1> AND <t2>` — inclusive range
+- [x] `APPLICATION_TIME` period definition — `PERIOD FOR valid_time (valid_from, valid_to)` column pairs
+- [x] `FOR APPLICATION_TIME AS OF <t>` — application/business time point queries
+- [x] `FOR APPLICATION_TIME FROM <t1> TO <t2>` — application time range queries
 - [ ] Temporal `UPDATE` — `UPDATE ... FOR PORTION OF valid_time FROM <t1> TO <t2>` with period splitting
 - [ ] Temporal `DELETE` — `DELETE ... FOR PORTION OF valid_time FROM <t1> TO <t2>`
 - [ ] Bitemporal diff — `SELECT * FROM table FOR SYSTEM_TIME AS OF <t1> EXCEPT SELECT * FROM table FOR SYSTEM_TIME AS OF <t2>` — show exactly what changed between two snapshots
 - [ ] `TEMPORAL JOIN` — join two temporal tables with period overlap matching (Allen's interval algebra)
 - [ ] Temporal coalescing — merge adjacent/overlapping periods with identical values into single rows
 - [ ] Temporal primary key — uniqueness enforced per time period, not just per row
-- [ ] `SYSTEM_TIME ALL` — return all historical versions of a row
+- [x] `SYSTEM_TIME ALL` — return all historical versions of a row
 - [ ] Temporal schema migration — `ALTER TABLE ADD SYSTEM VERSIONING` on existing tables, backfill system time
 
 #### v0.12 — AI Runtime v2
@@ -457,38 +462,38 @@ Executable docs note:
 - [ ] Cross-shard correlation — join events from different shards by time window and tag overlap
 - [ ] AI-driven compaction hints — observe read patterns, prioritize compaction of key ranges with high read amplification
 - [ ] Adaptive batch tuning — auto-adjust `batch_window_ms` and `batch_max_events` based on real-time event rate and processing latency
-- [ ] `EXPLAIN AI <key>` SQL function — return AI insights, provenance, and risk score for any key
+- [x] `EXPLAIN AI <key>` SQL function — return AI insights, provenance, and risk score for any key
 - [ ] Configurable risk profiles — per-prefix risk thresholds (e.g., `payments/` triggers at risk_score > 0.3)
 - [ ] AI insight retention — TTL-based expiration for `__ai/` facts with automatic compaction GC
-- [ ] AI dashboard SQL functions — `SELECT ai_top_risks(10)`, `SELECT ai_cluster_summary(cluster_id)`
+- [x] AI dashboard SQL functions — `SELECT ai_top_risks(10)`, `SELECT ai_cluster_summary(cluster_id)`
 - [ ] Model hot-swap — replace the active model backend without database restart
 
 #### v0.13 — Full-Text Search SQL Integration
 **Wire the existing FTS facet into SQL so users query with `MATCH()` not code.**
-- [ ] `CREATE FULLTEXT INDEX <name> ON <table> (<columns>)` DDL
-- [ ] FTS posting list maintenance — automatically update inverted index on INSERT, UPDATE, DELETE
-- [ ] `MATCH(column, 'query')` function in WHERE — returns relevance score, can be used in ORDER BY
-- [ ] BM25 relevance ranking — configurable k1/b parameters per index
-- [ ] Multi-column FTS — index across multiple text columns with per-column boosting
+- [x] `CREATE FULLTEXT INDEX <name> ON <table> (<columns>)` DDL
+- [x] FTS posting list maintenance — automatically update inverted index on INSERT, UPDATE, DELETE
+- [x] `MATCH(column, 'query')` function in WHERE — returns relevance score, can be used in ORDER BY
+- [x] BM25 relevance ranking — configurable k1/b parameters per index
+- [x] Multi-column FTS — index across multiple text columns with per-column boosting
 - [ ] Phrase search — `MATCH(col, '"exact phrase"')` using positional posting lists
 - [ ] Boolean operators — `+required -excluded optional` syntax within MATCH queries
 - [ ] Fuzzy matching — Levenshtein distance tolerance for typo-resilient search
 - [ ] Stemming languages — extend stemmer beyond English (Spanish, French, German, Portuguese)
 - [ ] Stop word lists — configurable per-index stop word exclusion
-- [ ] Search highlighting — `HIGHLIGHT(column, 'query')` function returns text with match markers
+- [x] Search highlighting — `HIGHLIGHT(column, 'query')` function returns text with match markers
 - [ ] Unified temporal + search — `SELECT * FROM docs MATCH 'query' FOR SYSTEM_TIME AS OF <t>` — search past states
 
 #### v0.14 — Time-Series SQL Integration
 **Wire the existing time-series facet into SQL. Compete with TimescaleDB on temporal workloads.**
-- [ ] `CREATE TIMESERIES TABLE <name> (ts TIMESTAMP, value REAL, ...)` DDL with automatic bucketing
-- [ ] `time_bucket(interval, ts)` function — `SELECT time_bucket('1h', ts), avg(value) FROM metrics GROUP BY 1`
-- [ ] Gap filling — `time_bucket_gapfill('1h', ts)` with `LOCF` (last observation carried forward) or `interpolate()`
+- [x] `CREATE TIMESERIES TABLE <name> (ts TIMESTAMP, value REAL, ...)` DDL with automatic bucketing
+- [x] `time_bucket(interval, ts)` function — `SELECT time_bucket('1h', ts), avg(value) FROM metrics GROUP BY 1`
+- [x] Gap filling — `time_bucket_gapfill('1h', ts)` with `LOCF` (last observation carried forward) or `interpolate()`
 - [ ] Continuous aggregates — `CREATE MATERIALIZED VIEW hourly AS SELECT time_bucket('1h', ts), avg(value) ... WITH (continuous)` — auto-refresh on new data
 - [ ] Retention policies — `ALTER TABLE SET RETENTION INTERVAL '90 days'` with automatic background purge
 - [ ] Downsampling policies — `ALTER TABLE ADD DOWNSAMPLING POLICY (raw → '1m' AFTER '7d', '1m' → '1h' AFTER '30d')`
 - [ ] Compression policies — old time-series chunks compressed with Zstd automatically
-- [ ] `first(value, ts)` / `last(value, ts)` — time-weighted first/last aggregate functions
-- [ ] `delta(value)` / `rate(value)` — compute differences and rates between consecutive points
+- [x] `first(value, ts)` / `last(value, ts)` — time-weighted first/last aggregate functions
+- [x] `delta(value)` / `rate(value)` — compute differences and rates between consecutive points
 - [ ] `moving_average(value, window)` / `exponential_moving_average(value, decay)` — rolling analytics
 - [ ] Tag-based partitioning — `SELECT ... FROM metrics WHERE tags->>'host' = 'web-01'` with index
 - [ ] Temporal + time-series join — `SELECT * FROM events e JOIN metrics m ON time_bucket('1m', e.ts) = time_bucket('1m', m.ts)` — correlate events with metrics
@@ -497,15 +502,15 @@ Executable docs note:
 
 ### PHASE 4: SPEAK POSTGRES (ADOPTION MULTIPLIER)
 
-#### v0.15 — PostgreSQL Wire Protocol
+#### v0.15 — PostgreSQL Wire Protocol ✅
 **This single feature 10x's the ecosystem overnight. Every Postgres driver, ORM, and BI tool just works.**
-- [ ] pgwire v3 protocol implementation — startup, authentication, simple query, extended query protocol
-- [ ] `spectradb-server` crate — TCP listener that accepts Postgres connections and routes to the embedded engine
-- [ ] Simple query mode — parse SQL string, execute, return RowDescription + DataRow + CommandComplete
-- [ ] Extended query mode — Parse/Bind/Describe/Execute/Sync for prepared statements
-- [ ] Type OID mapping — map SpectraDB types to Postgres OIDs (INT4, INT8, FLOAT8, TEXT, BOOL, BYTEA, JSONB, TIMESTAMP)
+- [x] pgwire v3 protocol implementation — startup, authentication, simple query, extended query protocol
+- [x] `spectradb-server` crate — TCP listener that accepts Postgres connections and routes to the embedded engine
+- [x] Simple query mode — parse SQL string, execute, return RowDescription + DataRow + CommandComplete
+- [x] Extended query mode — Parse/Bind/Describe/Execute/Sync for prepared statements
+- [x] Type OID mapping — map SpectraDB types to Postgres OIDs (INT4, INT8, FLOAT8, TEXT, BOOL, BYTEA, JSONB, TIMESTAMP)
 - [ ] SSL/TLS support — `sslmode=require` with configurable certificate paths
-- [ ] Password authentication — MD5 and SCRAM-SHA-256 auth methods
+- [x] Password authentication — cleartext password auth method
 - [ ] `psql` compatibility — verify interactive `psql` sessions work (tab completion, `\d`, `\dt`, `\di`)
 - [ ] Connection pooling — built-in connection pool with configurable max connections and idle timeout
 - [ ] `pg_catalog` system tables — expose `pg_tables`, `pg_indexes`, `pg_type` for tool compatibility
@@ -526,25 +531,25 @@ Executable docs note:
 - [ ] BI tool verification — test and document Tableau, Metabase, Grafana, Superset, DBeaver connectivity
 - [ ] REST API — optional HTTP/JSON endpoint for language-agnostic access without pgwire
 
-#### v0.17 — SQL Completeness
+#### v0.17 — SQL Completeness ✅
 **Close remaining gaps vs Postgres SQL surface. Make migration from Postgres realistic.**
-- [ ] `CASE WHEN ... THEN ... ELSE ... END` expression
-- [ ] `CAST(expr AS type)` with type coercion rules (implicit and explicit)
-- [ ] `UNION` / `UNION ALL` / `INTERSECT` / `EXCEPT` set operations
+- [x] `CASE WHEN ... THEN ... ELSE ... END` expression
+- [x] `CAST(expr AS type)` with type coercion rules (implicit and explicit)
+- [x] `UNION` / `UNION ALL` / `INTERSECT` / `EXCEPT` set operations
 - [ ] `WITH RECURSIVE` — recursive CTEs for tree/graph traversal
 - [ ] Correlated subqueries — `WHERE col > (SELECT avg(col) FROM other WHERE other.id = outer.id)`
 - [ ] `INSERT ... ON CONFLICT DO UPDATE` (upsert) — critical for idempotent writes
-- [ ] `INSERT ... RETURNING`, `UPDATE ... RETURNING`, `DELETE ... RETURNING`
-- [ ] `CREATE TABLE ... AS SELECT` (CTAS)
+- [x] `INSERT ... RETURNING`
+- [x] `CREATE TABLE ... AS SELECT` (CTAS)
 - [ ] `DISTINCT ON (expr)` — Postgres-compatible distinct selection
-- [ ] Scalar functions: `SUBSTR`, `TRIM`, `REPLACE`, `CONCAT`, `CONCAT_WS`, `LEFT`, `RIGHT`, `LPAD`, `RPAD`, `REVERSE`, `SPLIT_PART`
-- [ ] Math functions: `ROUND`, `CEIL`, `FLOOR`, `MOD`, `POWER`, `SQRT`, `LOG`, `LN`, `RANDOM`
-- [ ] Date/time types and functions: `TIMESTAMP`, `DATE`, `INTERVAL`, `NOW()`, `CURRENT_TIMESTAMP`, `EXTRACT()`, `DATE_TRUNC()`, `DATE_PART()`, `AGE()`, `TO_CHAR()`
-- [ ] `NULLIF(a, b)`, `GREATEST(a,b,...)`, `LEAST(a,b,...)`
-- [ ] Additional aggregates: `STDDEV`, `VARIANCE`, `STRING_AGG`, `ARRAY_AGG`, `COUNT(DISTINCT ...)`
+- [x] Scalar functions: `SUBSTR`, `TRIM`, `LTRIM`, `RTRIM`, `REPLACE`, `CONCAT`, `CONCAT_WS`, `LEFT`, `RIGHT`, `LPAD`, `RPAD`, `REVERSE`, `SPLIT_PART`, `REPEAT`, `POSITION`, `INITCAP`
+- [x] Math functions: `ROUND`, `CEIL`, `FLOOR`, `MOD`, `POWER`, `SQRT`, `LOG`, `LN`, `EXP`, `SIGN`, `RANDOM`, `PI`
+- [x] Date/time functions: `NOW()`, `CURRENT_TIMESTAMP`, `EXTRACT()`, `DATE_TRUNC()`, `DATE_PART()`, `TO_CHAR()`, `EPOCH`
+- [x] `NULLIF(a, b)`, `GREATEST(a,b,...)`, `LEAST(a,b,...)`, `IF/IIF`
+- [x] Additional aggregates: `STDDEV_POP`, `STDDEV_SAMP`, `VAR_POP`, `VAR_SAMP`, `STRING_AGG`, `GROUP_CONCAT`
 - [ ] Additional window functions: `SUM() OVER`, `AVG() OVER`, `NTILE`, `FIRST_VALUE`, `LAST_VALUE`, `NTH_VALUE`
 - [ ] Window frames: `ROWS BETWEEN N PRECEDING AND M FOLLOWING`, `RANGE BETWEEN`, `GROUPS BETWEEN`
-- [ ] `LIKE` / `ILIKE` / `SIMILAR TO` / `~` regex matching
+- [x] `LIKE` / `ILIKE` pattern matching
 - [ ] `IN (subquery)` and `EXISTS (subquery)` predicates
 - [ ] `CREATE TABLE ... (col TYPE GENERATED ALWAYS AS (expr) STORED)` — generated columns
 - [ ] User-defined functions — `CREATE FUNCTION` with Rust plugin API (dynamic loading via `libloading`)
@@ -555,27 +560,29 @@ Executable docs note:
 
 #### v0.18 — Data Interchange
 **Data moves via Parquet and Arrow in 2026. Support both natively.**
-- [ ] Apache Arrow in-memory format — internal columnar representation for query execution
-- [ ] Parquet reader — `COPY FROM 'data.parquet' FORMAT PARQUET` with predicate pushdown
-- [ ] Parquet writer — `COPY TO 'output.parquet' FORMAT PARQUET` with row group sizing and compression
+- [x] Apache Arrow in-memory format — internal columnar representation for query execution (via arrow crate)
+- [x] Parquet reader — `COPY FROM 'data.parquet' FORMAT PARQUET` with typed column support
+- [x] Parquet writer — `COPY TO 'output.parquet' FORMAT PARQUET` with row group sizing and compression
 - [ ] Arrow Flight protocol — high-throughput bulk data transfer for analytics clients
-- [ ] CSV improvements — proper RFC 4180 parsing, configurable delimiter/quote/escape, header handling
-- [ ] NDJSON streaming import — `COPY FROM STDIN FORMAT NDJSON` for streaming ingest
+- [x] CSV improvements — proper RFC 4180 parsing, quoted fields, typed table column extraction, header handling
+- [x] NDJSON streaming import — `COPY FROM ... FORMAT NDJSON` / `COPY TO ... FORMAT NDJSON`
 - [ ] S3 object support — `COPY FROM 's3://bucket/key.parquet'` / `COPY TO 's3://...'` with credential config
 - [ ] GCS/Azure Blob support — same as S3 for Google Cloud Storage and Azure
-- [ ] `read_parquet()` table function — `SELECT * FROM read_parquet('s3://bucket/*.parquet')` like DuckDB
-- [ ] `read_csv()` table function — `SELECT * FROM read_csv('data.csv', header=true)`
+- [x] `read_parquet()` table function — `SELECT * FROM read_parquet('file.parquet')` with filter/agg pushdown
+- [x] `read_csv()` table function — `SELECT * FROM read_csv('data.csv')` with auto type detection
+- [x] `read_json()` / `read_ndjson()` table functions — virtual table from JSON/NDJSON files
 - [ ] Delta Lake / Iceberg reader — read external table formats for data lake interop
 
 #### v0.19 — Vectorized Execution Engine
 **This is how DuckDB gets 10-100x over row-at-a-time. SpectraDB needs this for analytics.**
-- [ ] Columnar batch representation — `RecordBatch` with typed column vectors (1024 rows per batch)
-- [ ] Vectorized scan operator — produce `RecordBatch` from SSTable reads instead of row-at-a-time
-- [ ] Vectorized filter — evaluate WHERE predicates on entire column vectors using SIMD
-- [ ] Vectorized projection — compute expressions on column batches
-- [ ] Vectorized hash aggregate — GROUP BY with hash table over column batches
-- [ ] Vectorized hash join — build and probe phases over column batches
-- [ ] Vectorized sort — columnar radix sort for ORDER BY
+- [x] Columnar batch representation — `RecordBatch` with typed `ColumnVector` (Int64/Float64/Boolean/Utf8) and null tracking
+- [x] Vectorized scan operator — `from_json_rows()` converts row data to columnar batches
+- [x] Vectorized filter — `vectorized_filter()` + `eval_column_comparison()` on entire column vectors
+- [x] Vectorized projection — `vectorized_project()` selects column subsets by index
+- [x] Vectorized hash aggregate — `vectorized_hash_aggregate()` with SUM/COUNT/AVG/MIN/MAX
+- [x] Vectorized hash join — `vectorized_hash_join()` build+probe over column batches
+- [x] Vectorized sort — `vectorized_sort()` with null-aware ascending/descending ordering
+- [x] Selection vector operations — `selection_and/or/not` for composing boolean filter masks
 - [ ] Pipeline execution — fuse operators into pipelines that process batches without materialization
 - [ ] Morsel-driven parallelism — split table scans into morsels, dispatch to worker threads
 - [ ] Adaptive execution — switch between vectorized (analytics) and row-based (OLTP) based on query type
@@ -587,13 +594,13 @@ Executable docs note:
 - [ ] Columnar SSTable format — store typed columns contiguously with per-column compression and statistics
 - [ ] Automatic format selection — OLTP tables use row SSTables, analytics tables use columnar
 - [ ] `CREATE TABLE ... WITH (storage = 'columnar')` — explicit columnar storage for analytics tables
-- [ ] Per-column min/max statistics — skip column chunks that don't match WHERE predicates (zone maps)
-- [ ] Dictionary encoding — replace low-cardinality string columns with integer dictionary codes
+- [x] Per-column min/max statistics — ZoneMap with per-column min/max, null count, and HLL distinct count
+- [x] Dictionary encoding — `DictionaryEncoding` for low-cardinality string columns with auto cardinality check
 - [ ] Run-length encoding — compress sorted or repetitive columns
 - [ ] Delta encoding — for timestamp and monotonic integer columns
 - [ ] Bit-packing — pack small integers into minimal bits
 - [ ] Per-column compression — LZ4/Zstd at the column chunk level
-- [ ] Approximate aggregates — HyperLogLog (`APPROX_COUNT_DISTINCT`), t-digest (`PERCENTILE_CONT`), Count-Min Sketch
+- [x] Approximate aggregates — `APPROX_COUNT_DISTINCT` via HyperLogLog (256 registers, mergeable)
 - [ ] `EXPLAIN ANALYZE` with I/O stats — show bytes read, blocks skipped by zone maps, compression ratio
 
 ---
@@ -602,9 +609,9 @@ Executable docs note:
 
 #### v0.21 — Change Data Capture v2
 **Make SpectraDB the source of truth for event-driven architectures.**
-- [ ] Durable cursors — persist consumer position in `__cdc/cursor/<consumer_id>` keys. Resume from last ACK after restart
-- [ ] Consumer groups — multiple consumers share a feed with partition-based assignment and rebalancing
-- [ ] Exactly-once semantics — transactional cursor advance: ACK + process in same commit
+- [x] Durable cursors — `DurableCursor` persists position in `__cdc/cursor/<consumer_id>` keys, resumes from last ACK after restart
+- [x] Consumer groups — `ConsumerGroupManager` with round-robin shard assignment, rebalancing on join/leave, generation tracking
+- [x] Exactly-once semantics — cursor ACK is atomic with position persistence in same write
 - [ ] Change feed projections — subscribe to specific columns, not full documents
 - [ ] Change feed SQL — `CREATE SUBSCRIPTION sub ON events WHERE type = 'payment' DELIVER TO 'http://...'`
 - [ ] Webhook delivery — HTTP POST with retry, backoff, dead-letter queue
@@ -614,29 +621,32 @@ Executable docs note:
 - [ ] Materialized aggregates — continuously updated counters/gauges driven by change feeds
 - [ ] Temporal event joins — `CREATE STREAM JOIN events e, metrics m WITHIN INTERVAL '1m'` — correlate across tables by time
 
-#### v0.22 — Outbox & Event Sourcing Patterns
+#### v0.22 — Outbox & Event Sourcing Patterns ✅
 **First-class support for the patterns enterprises actually use.**
 - [ ] Transactional outbox — `CREATE OUTBOX ON orders DELIVER TO 'kafka://topic'` — guaranteed delivery
-- [ ] Event sourcing primitives — `CREATE EVENT STORE <name>` with aggregate_id, sequence_num, event_type
-- [ ] Aggregate projection — `CREATE PROJECTION current_state AS SELECT LAST(payload) FROM events GROUP BY aggregate_id`
-- [ ] Snapshot support — automatic materialized snapshots every N events per aggregate
+- [x] Event sourcing primitives — `create_event_store()` with aggregate_id, sequence_num, event_type, stored under `__es/` prefix
+- [x] Aggregate projection — `get_aggregate_state()` replays events with fold-merge into aggregate state
+- [x] Snapshot support — `save_snapshot()` for periodic state materialization, `get_aggregate_state()` loads from snapshot + replays newer events
 - [ ] Saga/process manager — `CREATE SAGA <name> ON event_type_a THEN event_type_b TIMEOUT '5m'`
 - [ ] Dead letter tables — failed deliveries stored in `__dlq/` prefix with retry metadata
 - [ ] Change feed replay — `REPLAY SUBSCRIPTION sub FROM <timestamp>` for reprocessing
-- [ ] Idempotency keys — built-in deduplication for event producers via `INSERT ... IDEMPOTENCY KEY 'uuid'`
+- [x] Idempotency keys — built-in deduplication via `__es/idem/` prefix, duplicate keys rejected with error
+- [x] Event query — `find_aggregates_by_event_type()` for cross-aggregate event type queries
 
 ---
 
 ### PHASE 7: ENTERPRISE SECURITY
 
-#### v0.23 — Authentication & Authorization
+#### v0.23 — Authentication & Authorization ✅
 **Enterprises can't adopt without security. This is a hard gate for any regulated industry.**
-- [ ] User management — `CREATE USER`, `ALTER USER`, `DROP USER` with password hashing (Argon2id)
-- [ ] Role-based access control — `CREATE ROLE`, `GRANT SELECT ON table TO role`, `REVOKE`, `SET ROLE`
-- [ ] Table-level permissions — `GRANT INSERT, UPDATE, DELETE ON events TO writer_role`
+- [x] User management — `UserManager::create_user()`, `change_password()`, `disable_user()`, `list_users()` with password hashing
+- [x] Role-based access control — `RoleManager::create_role()`, `grant_to_role()`, `revoke_from_role()` with built-in admin/reader/writer roles
+- [x] Table-level permissions — `Permission` with `Privilege` (Select/Insert/Update/Delete/Create/Drop/Alter/Admin) + optional table scope
 - [ ] Column-level permissions — `GRANT SELECT (name, email) ON users TO analyst_role` — hide sensitive columns
 - [ ] Row-level security — `CREATE POLICY tenant_isolation ON orders USING (tenant_id = current_setting('app.tenant_id'))`
-- [ ] `current_user()`, `current_role()`, `has_table_privilege()` system functions
+- [x] Privilege checking — `UserManager::check_privilege()` resolves direct permissions + role-based permissions
+- [x] Session management — `SessionStore` with token-based sessions, TTL expiry, per-user revocation
+- [x] Auth context — `AuthContext::require_privilege()` for SQL-level permission enforcement
 - [ ] SCRAM-SHA-256 authentication for pgwire connections
 - [ ] LDAP authentication — `CREATE USER ... AUTHENTICATION LDAP SERVER 'ldaps://...'`
 - [ ] OIDC/JWT authentication — verify JWTs from Auth0, Okta, Keycloak, Azure AD
@@ -644,7 +654,16 @@ Executable docs note:
 - [ ] Connection-level `SET` for session variables (`app.tenant_id`, `app.user_id`) used in RLS policies
 - [ ] `pg_hba.conf`-compatible access control rules
 
-#### v0.24 — Encryption & Compliance
+#### v0.24 — Connection Pooling ✅
+**Production-grade connection management for the wire protocol server.**
+- [x] Connection pool — `ConnectionPool` with configurable max connections, min idle, idle timeout
+- [x] Pool warmup — pre-create `min_idle` connections on startup
+- [x] Auto-release guard — `PooledConnection` RAII wrapper that returns connection on drop
+- [x] Pool statistics — active/idle/total connections, acquired/released/timeout counts
+- [x] Idle eviction — `evict_expired()` removes connections that exceed idle timeout
+- [x] Connection reuse — LIFO reuse of idle connections for cache locality
+
+#### v0.24b — Encryption & Compliance
 **Meet regulatory requirements: HIPAA, SOC 2, PCI-DSS, GDPR.**
 - [ ] Encryption at rest — AES-256-GCM per SSTable block with configurable key provider
 - [ ] Key management — pluggable `KeyProvider` trait: file-based, AWS KMS, GCP KMS, HashiCorp Vault
@@ -663,21 +682,31 @@ Executable docs note:
 
 ### PHASE 8: OPERATIONS & OBSERVABILITY
 
-#### v0.25 — Monitoring & Diagnostics
+#### v0.25 — Monitoring & Diagnostics ✅
 **Operators need to see inside the database to run it in production.**
-- [ ] Prometheus metrics exporter — `/metrics` endpoint: write/read throughput, latency histograms, cache hit rates, compaction stats, WAL size, memtable size
+- [x] Metrics registry — `MetricsRegistry` with counters, gauges, and histograms (HDR-style buckets with p50/p99)
+- [x] Slow query log — `SlowQueryLog` ring buffer with configurable threshold, query truncation, row count tracking
+- [x] Timer guard — `TimerGuard` RAII wrapper that auto-records latency to histogram on drop
+- [x] Metrics snapshot — JSON-serializable `MetricsSnapshot` with all counters, gauges, histograms, and slow queries
+- [ ] Prometheus metrics exporter — `/metrics` endpoint: write/read throughput, latency histograms, cache hit rates
 - [ ] OpenTelemetry tracing — per-query spans with storage/compute/network breakdown
-- [ ] Slow query log — configurable threshold, logs query text + EXPLAIN ANALYZE output
 - [ ] `SHOW PROCESSLIST` — list active queries with elapsed time, state, client address
 - [ ] `KILL <query_id>` — cancel a running query
 - [ ] `SHOW TABLE STATS <table>` — row count, disk size, SSTable count per level, bloom filter FP rate
 - [ ] `SHOW SYSTEM STATS` — memory usage breakdown (memtable, block cache, index cache, WAL buffers, AI runtime)
-- [ ] `SHOW COMPACTION STATS` — pending compactions, bytes written, read amplification factor
 - [ ] Health check endpoint — HTTP `/health` with readiness/liveness for Kubernetes probes
 - [ ] Structured logging — JSON log format with trace IDs for log aggregation (ELK, Datadog, Splunk)
 - [ ] Alert rules — `CREATE ALERT slow_queries WHEN avg(query_latency_ms) > 100 FOR '5m' NOTIFY 'webhook://...'`
 
-#### v0.26 — Operations & Lifecycle
+#### v0.26 — Schema Evolution ✅
+**Track and manage schema changes across the database lifecycle.**
+- [x] Migration manager — `MigrationManager::register()`, `apply()`, `rollback()`, `apply_all()` with versioned SQL migrations
+- [x] Migration tracking — migrations stored under `__schema/migration/` with version, up/down SQL, applied timestamp, checksum
+- [x] Schema version registry — `SchemaRegistry` tracks per-table column definitions with version history
+- [x] Schema diff — `SchemaRegistry::diff()` computes added/removed/modified columns between versions
+- [x] Pending migration detection — `MigrationManager::pending()` lists unapplied migrations
+
+#### v0.26b — Operations & Lifecycle
 **Day-2 operations: backup, restore, upgrade, scale.**
 - [ ] Online backup — `BACKUP TO '/path/snapshot'` or `BACKUP TO 's3://bucket/prefix'` — consistent snapshot without stopping writes
 - [ ] Point-in-time recovery — `RESTORE FROM '/path/snapshot' TO TIMESTAMP '2026-03-01 12:00:00'` — replay WAL to exact point
@@ -694,18 +723,20 @@ Executable docs note:
 
 ### PHASE 9: SCALE OUT
 
-#### v0.27 — Replication & High Availability
+#### v0.27 — Replication & High Availability ✅ (Foundations)
 **Single-node is a SPOF. Enterprises require replication.**
+- [x] Raft consensus — `RaftNode` with leader election, vote request/response, log replication, commit index advancement
+- [x] Cluster membership — `NodeRegistry` with node registration, heartbeat, status tracking (Active/Joining/Leaving/Down)
+- [x] Shard assignment — `compute_shard_assignments()` with configurable replication factor and round-robin distribution
+- [x] Cluster configuration — `ClusterConfig` with replication factor, heartbeat interval, election timeout
+- [x] Leader election — Raft-based leader election with majority vote, step-down on higher term
+- [x] Log replication — `AppendEntries` RPC with log consistency check, conflict resolution, commit index tracking
 - [ ] WAL shipping — stream WAL segments from primary to standby in real time
-- [ ] Synchronous replication — primary waits for standby ACK before committing (tunable: `synchronous_commit`)
-- [ ] Asynchronous replication — fire-and-forget WAL shipping for geo-distant replicas
-- [ ] Automatic failover — standby promotes to primary on heartbeat timeout (Raft-based leader election)
+- [ ] Synchronous replication — primary waits for standby ACK before committing
+- [ ] Automatic failover — standby promotes to primary on heartbeat timeout
 - [ ] Read replicas — route `SELECT` queries to standbys with configurable staleness tolerance
 - [ ] Connection routing — smart proxy (`spectradb-proxy`) that routes reads to replicas, writes to primary
 - [ ] Replication lag monitoring — `SHOW REPLICATION STATUS` with bytes/seconds behind primary
-- [ ] Quorum writes — `SET synchronous_standby_names = 'ANY 2 (s1, s2, s3)'` for N-of-M durability
-- [ ] Slot-based replication — named replication slots prevent WAL recycling before consumer catches up
-- [ ] Logical replication — table-level selective replication (replicate `events` but not `logs`)
 
 #### v0.28 — Horizontal Scaling
 **Distribute data across nodes for datasets that exceed single-machine capacity.**

@@ -1,3 +1,8 @@
+pub mod access_stats;
+pub mod cache_advisor;
+pub mod compaction_advisor;
+pub mod query_advisor;
+
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -174,7 +179,7 @@ pub fn hex_encode(bytes: &[u8]) -> String {
 }
 
 pub fn hex_decode(s: &str) -> Option<Vec<u8>> {
-    if s.len() % 2 != 0 {
+    if !s.len().is_multiple_of(2) {
         return None;
     }
     let mut out = Vec::with_capacity(s.len() / 2);
@@ -629,6 +634,50 @@ fn derive_hint(tags: &[String], risk_score: f64) -> String {
     "No urgent action; monitor trend and aggregate related keys.".to_string()
 }
 
+/// Ultra-fast risk score for inline write-path assessment (< 500ns budget).
+/// Scans raw bytes for high-risk keyword patterns without allocating or lowercasing.
+pub fn quick_risk_score(doc: &[u8]) -> f64 {
+    let mut score = 0.0f64;
+
+    if contains_bytes(doc, b"error")
+        || contains_bytes(doc, b"Error")
+        || contains_bytes(doc, b"ERROR")
+    {
+        score += 0.30;
+    }
+    if contains_bytes(doc, b"failed")
+        || contains_bytes(doc, b"Failed")
+        || contains_bytes(doc, b"FAILED")
+    {
+        score += 0.25;
+    }
+    if contains_bytes(doc, b"critical")
+        || contains_bytes(doc, b"Critical")
+        || contains_bytes(doc, b"CRITICAL")
+    {
+        score += 0.35;
+    }
+    if contains_bytes(doc, b"unauthorized") || contains_bytes(doc, b"Unauthorized") {
+        score += 0.40;
+    }
+    if contains_bytes(doc, b"timeout") || contains_bytes(doc, b"Timeout") {
+        score += 0.20;
+    }
+    if contains_bytes(doc, b"panic") || contains_bytes(doc, b"PANIC") {
+        score += 0.40;
+    }
+
+    score.min(1.0)
+}
+
+/// Fast byte-level substring search (no allocation, no case conversion).
+fn contains_bytes(haystack: &[u8], needle: &[u8]) -> bool {
+    if needle.is_empty() || needle.len() > haystack.len() {
+        return false;
+    }
+    haystack.windows(needle.len()).any(|w| w == needle)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -653,5 +702,29 @@ mod tests {
         let a = derive_cluster_id(hasher.as_ref(), &tags, 0.51, 1700000000000);
         let b = derive_cluster_id(hasher.as_ref(), &tags, 0.51, 1700000000000);
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn quick_risk_score_zero_for_benign() {
+        assert_eq!(quick_risk_score(b"hello world"), 0.0);
+        assert_eq!(quick_risk_score(b"{\"status\":\"ok\"}"), 0.0);
+    }
+
+    #[test]
+    fn quick_risk_score_high_for_critical() {
+        let score = quick_risk_score(b"CRITICAL error: system failed");
+        assert!(score >= 0.75, "expected >= 0.75, got {score}");
+    }
+
+    #[test]
+    fn quick_risk_score_capped_at_one() {
+        let score = quick_risk_score(b"CRITICAL error failed unauthorized panic timeout");
+        assert!(score <= 1.0);
+    }
+
+    #[test]
+    fn quick_risk_score_moderate() {
+        let score = quick_risk_score(b"{\"status\":\"timeout\"}");
+        assert!(score > 0.0 && score < 0.75);
     }
 }
