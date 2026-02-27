@@ -3,7 +3,7 @@ name = "spectradb-cli"
 version = "0.1.0"
 edition = "2021"
 description = "Interactive CLI shell for SpectraDB with TAB completion, output modes, and AI features"
-license = "MIT"
+license = "BSL-1.1"
 repository = "https://github.com/spectra-db/SpectraDB"
 
 [features]
