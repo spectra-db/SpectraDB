@@ -3,7 +3,7 @@ name = "spectradb-server"
 version = "0.1.0"
 edition = "2021"
 description = "PostgreSQL wire protocol server for SpectraDB"
-license = "BSL-1.1"
+license = "PolyForm-Noncommercial-1.0.0"
 
 [[bin]]
 name = "spectradb-server"
