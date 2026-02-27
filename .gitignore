@@ -19,9 +19,6 @@
 .env
 .env.*
 
-# Tool config
-.claude/
-
 # Docs site build artifacts
 docs/node_modules/
 docs/dist/
