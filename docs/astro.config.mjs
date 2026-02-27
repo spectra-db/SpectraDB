@@ -5,8 +5,7 @@ import starlight from '@astrojs/starlight';
 const noSitemap = { name: '@astrojs/sitemap', hooks: {} };
 
 export default defineConfig({
-  site: 'https://spectra-db.github.io',
-  base: '/SpectraDB',
+  site: 'https://spectradb.netlify.app',
   integrations: [
     noSitemap,
     starlight({
