@@ -6,7 +6,7 @@
 //! reading a user often leads to reading their orders, which leads to reading products.
 //!
 //! # The Innovation
-//! SpectraDB builds a Markov chain of key-to-key transitions. When key A is read,
+//! TensorDB builds a Markov chain of key-to-key transitions. When key A is read,
 //! the system predicts which key B is most likely to be read next and prefetches it
 //! into the block cache BEFORE the application requests it.
 //!
@@ -21,7 +21,7 @@
 //! - RocksDB: readahead for sequential scans, no pattern-based prefetch
 //! - PostgreSQL: bitmap heap scans optimize random reads, but no prediction
 //! - InnoDB: linear read-ahead based on sequential access detection
-//! - SpectraDB: Markov chain predictions across arbitrary key access patterns
+//! - TensorDB: Markov chain predictions across arbitrary key access patterns
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};

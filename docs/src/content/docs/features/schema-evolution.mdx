@@ -2,10 +2,10 @@
 draft: false
 head: []
 title: Schema Evolution
-description: Evolving table schemas over time in SpectraDB.
+description: Evolving table schemas over time in TensorDB.
 ---
 
-SpectraDB supports schema evolution through ALTER TABLE statements while preserving full compatibility with historical data.
+TensorDB supports schema evolution through ALTER TABLE statements while preserving full compatibility with historical data.
 
 ## Adding Columns
 
@@ -35,7 +35,7 @@ ALTER TABLE users RENAME COLUMN email TO email_address;
 
 ## Schema and Bitemporality
 
-Because SpectraDB is bitemporal, schema evolution has a unique property:
+Because TensorDB is bitemporal, schema evolution has a unique property:
 
 - The **current schema** is defined by the latest metadata at the current commit_ts
 - **Historical schemas** are preserved — `AS OF` queries use the schema that was active at that timestamp

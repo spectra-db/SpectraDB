@@ -1,4 +1,4 @@
-//! Connection handler: bridges pgwire protocol to SpectraDB SQL engine.
+//! Connection handler: bridges pgwire protocol to TensorDB SQL engine.
 
 use std::sync::Arc;
 
@@ -171,7 +171,7 @@ fn handle_simple_query(db: &Database, query: &str, buf: &mut BytesMut) {
         return;
     }
 
-    // Execute the query against SpectraDB
+    // Execute the query against TensorDB
     match db.sql(query) {
         Ok(result) => match result {
             SqlResult::Rows(rows) => {

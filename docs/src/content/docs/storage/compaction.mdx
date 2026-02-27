@@ -2,7 +2,7 @@
 draft: false
 head: []
 title: Compaction
-description: Multi-level compaction in SpectraDB's LSM storage engine.
+description: Multi-level compaction in TensorDB's LSM storage engine.
 ---
 
 Compaction merges SSTables across levels to reduce read amplification and reclaim space from duplicate keys.
@@ -36,7 +36,7 @@ Triggered when a level exceeds its size target:
 
 ## Version Preservation
 
-**SpectraDB never drops temporal versions during compaction.** All versions of every key are preserved. This is critical for:
+**TensorDB never drops temporal versions during compaction.** All versions of every key are preserved. This is critical for:
 
 - Time-travel queries (AS OF)
 - Bitemporal queries (VALID AT)

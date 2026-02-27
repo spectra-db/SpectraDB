@@ -1,4 +1,4 @@
-# Contributing to SpectraDB
+# Contributing to TensorDB
 
 Thanks for your interest in contributing.
 

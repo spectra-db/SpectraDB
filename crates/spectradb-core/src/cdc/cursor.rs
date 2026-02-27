@@ -35,7 +35,7 @@ impl CursorPosition {
     }
 }
 
-/// A durable cursor that persists its position in SpectraDB itself.
+/// A durable cursor that persists its position in TensorDB itself.
 /// Allows consumers to resume from their last acknowledged position
 /// after restart.
 pub struct DurableCursor {

@@ -24,6 +24,15 @@ docs/node_modules/
 docs/dist/
 docs/.astro/
 
+# Node.js
+**/node_modules/
+
+# Claude Code
+.claude/
+
+# Compiled native modules
+*.node
+
 # Editor / OS noise
 .DS_Store
 .idea/

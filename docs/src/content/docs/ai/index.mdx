@@ -2,16 +2,16 @@
 draft: false
 head: []
 title: AI Runtime
-description: SpectraDB's embedded Tier-0 AI runtime with risk scoring, insights, and advisors.
+description: TensorDB's embedded Tier-0 AI runtime with risk scoring, insights, and advisors.
 ---
 
-SpectraDB includes an embedded AI runtime that operates in-process alongside the storage engine. This is a **Tier-0** design — AI computation runs inside the database, not as an external service.
+TensorDB includes an embedded AI runtime that operates in-process alongside the storage engine. This is a **Tier-0** design — AI computation runs inside the database, not as an external service.
 
 ## Architecture
 
 ```
 ┌──────────────────────────────────────────┐
-│              SpectraDB Engine             │
+│              TensorDB Engine             │
 │  ┌────────────┐  ┌──────────────────┐   │
 │  │ Storage    │  │ AI Runtime       │   │
 │  │ Engine     │──│  ├ Risk Scoring  │   │

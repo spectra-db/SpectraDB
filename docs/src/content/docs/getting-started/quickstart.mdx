@@ -2,7 +2,7 @@
 draft: false
 head: []
 title: Quickstart
-description: Get up and running with SpectraDB in 5 minutes. Create a database, write data, and run your first queries.
+description: Get up and running with TensorDB in 5 minutes. Create a database, write data, and run your first queries.
 ---
 
 This guide gets you from zero to running SQL queries in under 5 minutes.
@@ -10,21 +10,21 @@ This guide gets you from zero to running SQL queries in under 5 minutes.
 ## 1. Create a Project
 
 ```bash
-cargo new my-spectradb-app
-cd my-spectradb-app
-cargo add spectradb
+cargo new my-tensordb-app
+cd my-tensordb-app
+cargo add tensordb
 ```
 
 ## 2. Open a Database
 
 ```rust
-use spectradb::{Database, Config};
+use tensordb::{Database, Config};
 
-fn main() -> spectradb::Result<()> {
+fn main() -> tensordb::Result<()> {
     // Open (or create) a database at the given path
     let db = Database::open("my_data", Config::default())?;
 
-    println!("SpectraDB ready!");
+    println!("TensorDB ready!");
     Ok(())
 }
 ```
@@ -86,10 +86,10 @@ let past = db.sql("SELECT name, price FROM products WHERE id = 'p1' AS OF 1", &[
 
 ## 6. Bitemporal Queries
 
-SpectraDB separates *when data was recorded* (system time) from *when data was valid* (business time):
+TensorDB separates *when data was recorded* (system time) from *when data was valid* (business time):
 
 ```rust
-use spectradb::Value;
+use tensordb::Value;
 
 // Write a fact with an explicit business-time range
 db.put_temporal(

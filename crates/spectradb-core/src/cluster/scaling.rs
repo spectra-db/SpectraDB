@@ -1,6 +1,6 @@
 //! Horizontal Scaling Foundations (v0.28)
 //!
-//! This module provides the core primitives for scaling SpectraDB across multiple
+//! This module provides the core primitives for scaling TensorDB across multiple
 //! nodes in a distributed cluster. It introduces three key components:
 //!
 //! 1. **ConsistentHashRing** -- Virtual-node consistent hashing for deterministic

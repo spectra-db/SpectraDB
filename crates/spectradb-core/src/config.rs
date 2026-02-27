@@ -27,6 +27,11 @@ pub struct Config {
     // Fast write path
     pub fast_write_enabled: bool,
     pub fast_write_wal_batch_interval_us: u64,
+    // LLM (natural language → SQL)
+    /// Path to GGUF model file. If None, auto-discovers in `<db_root>/.local/models/`.
+    pub llm_model_path: Option<String>,
+    /// Max tokens for LLM generation (default: 256).
+    pub llm_max_tokens: usize,
 }
 
 impl Default for Config {
@@ -54,6 +59,8 @@ impl Default for Config {
             ai_access_stats_size: 1024,
             fast_write_enabled: true,
             fast_write_wal_batch_interval_us: 1000,
+            llm_model_path: None,
+            llm_max_tokens: 256,
         }
     }
 }

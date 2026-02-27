@@ -2,35 +2,35 @@
 draft: false
 head: []
 title: Installation
-description: How to install SpectraDB in your Rust project, build from source, or use language bindings.
+description: How to install TensorDB in your Rust project, build from source, or use language bindings.
 ---
 
 ## Cargo (Recommended)
 
-Add SpectraDB to your `Cargo.toml`:
+Add TensorDB to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-spectradb = "0.28"
+tensordb = "0.28"
 ```
 
 Or use `cargo add`:
 
 ```bash
-cargo add spectradb
+cargo add tensordb
 ```
 
 ## Build from Source
 
 ```bash
-git clone https://github.com/spectra-db/SpectraDB.git
-cd SpectraDB
+git clone https://github.com/tensor-db/TensorDB.git
+cd TensorDB
 cargo build --release
 ```
 
 ### Optional Features
 
-SpectraDB supports optional compile-time features for hardware acceleration:
+TensorDB supports optional compile-time features for hardware acceleration:
 
 | Feature | Flag | Description |
 |---------|------|-------------|
@@ -50,13 +50,13 @@ The pure-Rust path is always fully functional. Native features are performance o
 ## Python Bindings
 
 ```bash
-pip install spectradb
+pip install tensordb
 ```
 
 ```python
-import spectradb
+import tensordb
 
-db = spectradb.open("my_data")
+db = tensordb.open("my_data")
 db.sql("CREATE TABLE users (id TEXT, name TEXT)")
 db.sql("INSERT INTO users VALUES ('u1', 'Alice')")
 results = db.sql("SELECT * FROM users")
@@ -67,11 +67,11 @@ See the [Python integration guide](/integrations/python/) for details.
 ## Node.js Bindings
 
 ```bash
-npm install spectradb
+npm install tensordb
 ```
 
 ```javascript
-const { Database } = require('spectradb');
+const { Database } = require('tensordb');
 
 const db = Database.open('my_data');
 db.sql("CREATE TABLE users (id TEXT, name TEXT)");
@@ -83,22 +83,22 @@ See the [Node.js integration guide](/integrations/nodejs/) for details.
 
 ## CLI
 
-The SpectraDB CLI provides an interactive SQL shell:
+The TensorDB CLI provides an interactive SQL shell:
 
 ```bash
 # Build the CLI
-cargo build --release -p spectradb-cli
+cargo build --release -p tensordb-cli
 
 # Run it
-./target/release/spectradb-cli ./my_data
+./target/release/tensordb-cli ./my_data
 ```
 
 ```
-spectradb> CREATE TABLE test (id TEXT, value TEXT);
+tensordb> CREATE TABLE test (id TEXT, value TEXT);
 OK
-spectradb> INSERT INTO test VALUES ('k1', 'hello');
+tensordb> INSERT INTO test VALUES ('k1', 'hello');
 1 row inserted
-spectradb> SELECT * FROM test;
+tensordb> SELECT * FROM test;
 id | value
 ---+------
 k1 | hello
@@ -106,7 +106,7 @@ k1 | hello
 
 ## License
 
-SpectraDB is licensed under the [PolyForm Noncommercial License 1.0.0](https://github.com/spectra-db/SpectraDB/blob/main/LICENSE). You may use it freely for personal, educational, research, and non-commercial purposes. Commercial use requires a paid license — [contact us](mailto:walebadr@users.noreply.github.com) for details.
+TensorDB is licensed under the [PolyForm Noncommercial License 1.0.0](https://github.com/tensor-db/TensorDB/blob/main/LICENSE). You may use it freely for personal, educational, research, and non-commercial purposes. Commercial use requires a paid license — [contact us](mailto:walebadr@users.noreply.github.com) for details.
 
 ## System Requirements
 

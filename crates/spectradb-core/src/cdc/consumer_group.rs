@@ -112,7 +112,7 @@ impl ConsumerGroup {
     }
 }
 
-/// Manager for consumer groups, backed by SpectraDB storage.
+/// Manager for consumer groups, backed by TensorDB storage.
 pub struct ConsumerGroupManager;
 
 impl ConsumerGroupManager {

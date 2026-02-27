@@ -2,7 +2,7 @@
 draft: false
 head: []
 title: DDL — Data Definition
-description: CREATE TABLE, DROP TABLE, and ALTER TABLE statements in SpectraDB.
+description: CREATE TABLE, DROP TABLE, and ALTER TABLE statements in TensorDB.
 ---
 
 ## CREATE TABLE
@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS events (
 ```
 
 :::note
-SpectraDB tables don't have traditional PRIMARY KEY constraints. The first column is conventionally used as the row identifier for key encoding (`table/<name>/<pk_value>`).
+TensorDB tables don't have traditional PRIMARY KEY constraints. The first column is conventionally used as the row identifier for key encoding (`table/<name>/<pk_value>`).
 :::
 
 ## DROP TABLE

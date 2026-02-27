@@ -6,7 +6,7 @@
 //! Recovery requires manual intervention: backup restore, fsck, or data loss.
 //!
 //! # The Innovation
-//! SpectraDB's self-healing storage layer:
+//! TensorDB's self-healing storage layer:
 //! 1. Detects corruption at multiple granularities (page, block, SSTable, WAL)
 //! 2. Classifies the severity using an AI anomaly detector
 //! 3. Automatically repairs when possible (reconstruct from redundant data)
@@ -22,7 +22,7 @@
 //! - SQLite: detect + error, manual VACUUM for recovery
 //! - PostgreSQL: checksums since v12, but no auto-repair
 //! - ZFS: block-level self-healing with RAID-Z, but at filesystem level
-//! - SpectraDB: database-level self-healing with AI severity classification
+//! - TensorDB: database-level self-healing with AI severity classification
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};

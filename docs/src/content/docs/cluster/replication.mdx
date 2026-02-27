@@ -2,7 +2,7 @@
 draft: false
 head: []
 title: Replication
-description: Data replication across SpectraDB cluster nodes.
+description: Data replication across TensorDB cluster nodes.
 ---
 
 :::note[Roadmap Feature]
@@ -11,7 +11,7 @@ Multi-node replication is planned for a future release.
 
 ## Replication Model
 
-SpectraDB's append-only architecture simplifies replication:
+TensorDB's append-only architecture simplifies replication:
 
 - **No conflict resolution needed**: Facts are immutable and identified by (key, commit_ts)
 - **Simple synchronization**: Replicate the WAL log entries

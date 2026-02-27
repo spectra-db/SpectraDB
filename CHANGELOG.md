@@ -1,6 +1,23 @@
 # Changelog
 
-All notable changes to SpectraDB are documented in this file.
+All notable changes to TensorDB are documented in this file.
+
+## [0.2.0] — Embedded LLM: Natural Language → SQL
+
+### Added
+- Embedded Qwen3-0.6B model for natural language to SQL translation via llama.cpp
+- `ASK '<question>'` SQL statement — translates NL to SQL and executes in one step
+- `Database::ask()` and `Database::ask_sql()` Rust API methods
+- `PyDatabase.ask()` Python binding returning `{"sql": ..., "result": ...}`
+- `# <question>` prefix in both Rust and Python CLI shells (shows generated SQL, asks to confirm)
+- `LlmEngine` with lazy model loading, greedy sampling, and output cleaning
+- `llm` feature flag (default on) backed by `llama-cpp-2` crate
+- `llm_model_path` and `llm_max_tokens` config fields
+- `LlmNotAvailable` and `LlmError` error variants
+- Schema-aware prompting: gathers table schemas via SHOW TABLES + DESCRIBE before translation
+
+### Changed
+- All crate versions bumped to 0.2.0
 
 ## [0.28] — Fast Write Engine
 
@@ -184,7 +201,7 @@ All notable changes to SpectraDB are documented in this file.
 - Time-series facet (bucketed storage, downsampling, range queries)
 - Streaming change feeds with prefix-filtered subscriptions
 - io_uring async I/O for WAL and SSTable reads (`--features io-uring`)
-- Comparative benchmark harness (SpectraDB vs SQLite)
+- Comparative benchmark harness (TensorDB vs SQLite)
 
 ## [0.4] — SQL Surface & Developer Experience
 

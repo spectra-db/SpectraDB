@@ -1,6 +1,6 @@
-//! SpectraDB Quickstart Example
+//! TensorDB Quickstart Example
 //!
-//! Demonstrates the core features of SpectraDB: creating tables, inserting data,
+//! Demonstrates the core features of TensorDB: creating tables, inserting data,
 //! querying with SQL, time-travel reads, and AI insights.
 //!
 //! Run with: `cargo run --example quickstart`
@@ -18,7 +18,7 @@ fn main() -> spectradb::Result<()> {
         },
     )?;
 
-    println!("=== SpectraDB Quickstart ===\n");
+    println!("=== TensorDB Quickstart ===\n");
 
     // --- 1. Create Tables ---
     println!("1. Creating tables...");
@@ -136,7 +136,7 @@ fn main() -> spectradb::Result<()> {
     println!("   Total gets: {}", stats.gets);
     println!("   Bloom filter negatives: {}", stats.bloom_negatives);
 
-    println!("\n=== Done! SpectraDB is ready. ===");
+    println!("\n=== Done! TensorDB is ready. ===");
     Ok(())
 }
 

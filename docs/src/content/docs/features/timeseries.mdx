@@ -2,15 +2,15 @@
 draft: false
 head: []
 title: Time Series
-description: Bucketed time-series metrics and aggregation in SpectraDB.
+description: Bucketed time-series metrics and aggregation in TensorDB.
 ---
 
-SpectraDB's time series facet provides efficient storage and querying of timestamped metric data.
+TensorDB's time series facet provides efficient storage and querying of timestamped metric data.
 
 ## Storing Metrics
 
 ```rust
-use spectradb::Value;
+use tensordb::Value;
 
 // Store a metric data point
 db.put_temporal(
@@ -45,7 +45,7 @@ ORDER BY bucket;
 
 ## Bitemporal Advantage
 
-Unlike traditional time-series databases, SpectraDB's bitemporal model lets you:
+Unlike traditional time-series databases, TensorDB's bitemporal model lets you:
 
 - **Backfill data**: Write historical metrics without disrupting the timeline
 - **Correct errors**: Write a correction for past data while preserving the original

@@ -10,7 +10,7 @@ const benchmarks: Benchmark[] = [
     label: "Point Read Latency (lower is better)",
     maxValue: 1200,
     bars: [
-      { engine: "SpectraDB", value: 276, unit: "ns", class: "spectra" },
+      { engine: "TensorDB", value: 276, unit: "ns", class: "spectra" },
       { engine: "sled", value: 244, unit: "ns", class: "sled" },
       { engine: "redb", value: 573, unit: "ns", class: "redb" },
       { engine: "SQLite", value: 1080, unit: "ns", class: "sqlite" },
@@ -20,7 +20,7 @@ const benchmarks: Benchmark[] = [
     label: "Point Write Latency (lower is better)",
     maxValue: 40000,
     bars: [
-      { engine: "SpectraDB", value: 1900, unit: "ns", class: "spectra" },
+      { engine: "TensorDB", value: 1900, unit: "ns", class: "spectra" },
       { engine: "sled", value: 9200, unit: "ns", class: "sled" },
       { engine: "redb", value: 18400, unit: "ns", class: "redb" },
       { engine: "SQLite", value: 38600, unit: "ns", class: "sqlite" },
@@ -30,7 +30,7 @@ const benchmarks: Benchmark[] = [
     label: "Prefix Scan (100 keys, lower is better)",
     maxValue: 200,
     bars: [
-      { engine: "SpectraDB", value: 45, unit: "µs", class: "spectra" },
+      { engine: "TensorDB", value: 45, unit: "µs", class: "spectra" },
       { engine: "sled", value: 38, unit: "µs", class: "sled" },
       { engine: "redb", value: 89, unit: "µs", class: "redb" },
       { engine: "SQLite", value: 156, unit: "µs", class: "sqlite" },
@@ -40,7 +40,7 @@ const benchmarks: Benchmark[] = [
     label: "Mixed Workload (80% read, 20% write)",
     maxValue: 15000,
     bars: [
-      { engine: "SpectraDB", value: 2100, unit: "ns", class: "spectra" },
+      { engine: "TensorDB", value: 2100, unit: "ns", class: "spectra" },
       { engine: "sled", value: 4800, unit: "ns", class: "sled" },
       { engine: "redb", value: 7200, unit: "ns", class: "redb" },
       { engine: "SQLite", value: 12400, unit: "ns", class: "sqlite" },
@@ -58,7 +58,7 @@ function formatValue(value: number, unit: string): string {
 
 <div class="perf-chart" id="perf-chart">
   <div class="perf-legend">
-    <span class="perf-legend-item"><span class="perf-legend-dot spectra"></span> SpectraDB</span>
+    <span class="perf-legend-item"><span class="perf-legend-dot spectra"></span> TensorDB</span>
     <span class="perf-legend-item"><span class="perf-legend-dot sled"></span> sled</span>
     <span class="perf-legend-item"><span class="perf-legend-dot redb"></span> redb</span>
     <span class="perf-legend-item"><span class="perf-legend-dot sqlite"></span> SQLite</span>

@@ -2,7 +2,7 @@
 draft: false
 head: []
 title: Write Batching
-description: Amortizing WAL overhead with batch writes in SpectraDB.
+description: Amortizing WAL overhead with batch writes in TensorDB.
 ---
 
 Write batching groups multiple writes into a single WAL operation, amortizing the fsync cost.
@@ -10,7 +10,7 @@ Write batching groups multiple writes into a single WAL operation, amortizing th
 ## Rust API
 
 ```rust
-use spectradb::Value;
+use tensordb::Value;
 
 let batch = vec![
     ("user/alice", Value::Text("Alice".into())),

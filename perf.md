@@ -1,10 +1,10 @@
-# SpectraDB Performance Guide
+# TensorDB Performance Guide
 
 ## Benchmark Results
 
-SpectraDB ships with three Criterion benchmark suites. Results from a single-machine run:
+TensorDB ships with three Criterion benchmark suites. Results from a single-machine run:
 
-| Operation | SpectraDB | SQLite | sled | redb |
+| Operation | TensorDB | SQLite | sled | redb |
 |-----------|-----------|--------|------|------|
 | Point Read | **276 ns** | 1,080 ns | 244 ns | 573 ns |
 | Point Write (fast path) | **1.9 µs** | 38.6 µs | — | — |
@@ -21,13 +21,13 @@ SpectraDB ships with three Criterion benchmark suites. Results from a single-mac
 ### Running Benchmarks
 
 ```bash
-# SpectraDB vs SQLite (head-to-head)
+# TensorDB vs SQLite (head-to-head)
 cargo bench --bench comparative
 
-# SpectraDB vs SQLite vs sled vs redb (four-way)
+# TensorDB vs SQLite vs sled vs redb (four-way)
 cargo bench --bench multi_engine
 
-# SpectraDB microbenchmarks
+# TensorDB microbenchmarks
 cargo bench --bench basic
 
 # CLI-integrated benchmark with configurable workload

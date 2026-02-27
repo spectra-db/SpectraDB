@@ -18,7 +18,7 @@
 //! # Why This Is Novel
 //! - RocksDB/LevelDB: key-only bloom filters
 //! - Cassandra: key + partition bloom, no temporal dimension
-//! - SpectraDB: key + time-bucket bloom with AI-tuned granularity
+//! - TensorDB: key + time-bucket bloom with AI-tuned granularity
 
 use crate::native_bridge::Hasher;
 use std::sync::atomic::{AtomicU64, Ordering};

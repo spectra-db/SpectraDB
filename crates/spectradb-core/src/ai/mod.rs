@@ -2,6 +2,8 @@ pub mod access_stats;
 pub mod cache_advisor;
 pub mod compaction_advisor;
 pub mod inference;
+#[cfg(feature = "llm")]
+pub mod llm;
 pub mod ml_pipeline;
 pub mod query_advisor;
 

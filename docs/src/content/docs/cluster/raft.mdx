@@ -2,14 +2,14 @@
 draft: false
 head: []
 title: Raft Consensus
-description: Raft-based consensus for multi-node SpectraDB clusters.
+description: Raft-based consensus for multi-node TensorDB clusters.
 ---
 
 :::note[Roadmap Feature]
 Raft consensus is planned for a future release. This page describes the intended architecture.
 :::
 
-SpectraDB's clustering layer will use the Raft consensus protocol for leader election and log replication.
+TensorDB's clustering layer will use the Raft consensus protocol for leader election and log replication.
 
 ## Architecture
 
@@ -24,7 +24,7 @@ SpectraDB's clustering layer will use the Raft consensus protocol for leader ele
 
 - **Strong consistency**: All reads and writes go through the Raft leader
 - **Automatic failover**: If the leader fails, followers elect a new leader
-- **Append-only replication**: SpectraDB's immutable fact model maps naturally to Raft's replicated log
+- **Append-only replication**: TensorDB's immutable fact model maps naturally to Raft's replicated log
 - **Bitemporal preservation**: All temporal metadata is replicated faithfully
 
 ## How It Will Work

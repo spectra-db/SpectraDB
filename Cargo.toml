@@ -1,10 +1,10 @@
 [package]
 name = "spectradb"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-description = "Single-node, append-only, bitemporal ledger database with MVCC snapshot reads and SQL facet"
+description = "TensorDB — single-node, append-only, bitemporal ledger database with MVCC snapshot reads and SQL facet"
 license = "PolyForm-Noncommercial-1.0.0"
-repository = "https://github.com/spectra-db/spectraDB"
+repository = "https://github.com/tensor-db/tensorDB"
 keywords = ["database", "bitemporal", "mvcc", "embedded", "ledger"]
 categories = ["database-implementations"]
 
@@ -27,11 +27,12 @@ default-members = [
 resolver = "2"
 
 [features]
-default = []
+default = ["llm"]
 native = ["spectradb-core/native"]
 simd = ["spectradb-core/simd"]
 io-uring = ["spectradb-core/io-uring"]
 parquet = ["spectradb-core/parquet"]
+llm = ["spectradb-core/llm"]
 
 [dependencies]
 spectradb-core = { path = "crates/spectradb-core" }

@@ -1,23 +1,23 @@
-# SpectraDB — Architecture & Design
+# TensorDB — Architecture & Design
 
-## What SpectraDB Does
+## What TensorDB Does
 
-SpectraDB is an embedded database where **every change is preserved and queryable**. When you write data, the old version isn't overwritten — it becomes part of the history. You can ask "what did this record look like last Tuesday?" or "what was the account balance we believed was correct on March 1st?" and get exact answers using standard SQL.
+TensorDB is an embedded database where **every change is preserved and queryable**. When you write data, the old version isn't overwritten — it becomes part of the history. You can ask "what did this record look like last Tuesday?" or "what was the account balance we believed was correct on March 1st?" and get exact answers using standard SQL.
 
-This matters because most databases only keep the latest state. If you need audit trails, compliance records, time-travel debugging, or undo capabilities, you typically build versioning logic in your application. SpectraDB handles this at the storage level, so your application code stays simple.
+This matters because most databases only keep the latest state. If you need audit trails, compliance records, time-travel debugging, or undo capabilities, you typically build versioning logic in your application. TensorDB handles this at the storage level, so your application code stays simple.
 
 **The core idea:** every write is an immutable fact with two timestamps — *when it was recorded* (system time) and *when it was true* (business time). This separation is called bitemporal modeling, and it lets you answer two distinct questions:
 
 - **"What did we know at time T?"** — System time query (`AS OF`)
 - **"What was true at time T?"** — Business time query (`VALID AT`)
 
-SpectraDB wraps this in a full SQL engine with joins, aggregates, window functions, full-text search, vector search, time-series analytics, and an embedded AI runtime — all in a single Rust library you can embed in any application.
+TensorDB wraps this in a full SQL engine with joins, aggregates, window functions, full-text search, vector search, time-series analytics, and an embedded AI runtime — all in a single Rust library you can embed in any application.
 
 ---
 
 ## Data Model
 
-Every record stored in SpectraDB is a **fact** with five components:
+Every record stored in TensorDB is a **fact** with five components:
 
 | Field | Type | Purpose |
 |-------|------|---------|
@@ -526,7 +526,7 @@ Versioned schema migrations with rollback support.
 
 ## Change Data Capture
 
-SpectraDB supports real-time streaming of changes to downstream consumers.
+TensorDB supports real-time streaming of changes to downstream consumers.
 
 ### Basic Subscriptions
 
@@ -682,7 +682,7 @@ The `spectradb-server` crate implements the PostgreSQL v3 wire protocol, allowin
 
 **Type OID mapping:**
 
-| SpectraDB Type | PostgreSQL OID | Postgres Name |
+| TensorDB Type | PostgreSQL OID | Postgres Name |
 |----------------|----------------|---------------|
 | Boolean | 16 | BOOL |
 | Integer | 23 / 20 | INT4 / INT8 |
@@ -746,7 +746,7 @@ Parquet support uses Apache Arrow 54 and the parquet 54 crate. CSV parsing follo
 
 ## Storage Key Prefixes
 
-SpectraDB uses key prefixes to organize internal and user data:
+TensorDB uses key prefixes to organize internal and user data:
 
 | Prefix | Purpose |
 |--------|---------|
@@ -766,7 +766,7 @@ SpectraDB uses key prefixes to organize internal and user data:
 
 ## Invariants
 
-These properties hold at all times and are the foundation of SpectraDB's correctness guarantees:
+These properties hold at all times and are the foundation of TensorDB's correctness guarantees:
 
 1. **WAL-before-ACK** — No write is acknowledged until its WAL frame is enqueued for durability (fast path) or appended to disk (channel path).
 2. **Monotonic timestamps** — Shard commit timestamps are strictly increasing per shard.

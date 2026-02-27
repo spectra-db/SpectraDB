@@ -1,7 +1,7 @@
-//! SpectraDB PostgreSQL Wire Protocol Server
+//! TensorDB PostgreSQL Wire Protocol Server
 //!
 //! Accepts Postgres client connections (psql, JDBC, libpq, etc.) and routes
-//! SQL queries to the embedded SpectraDB engine.
+//! SQL queries to the embedded TensorDB engine.
 //!
 //! Usage:
 //!   spectradb-server --data-dir ./data --port 5433
@@ -53,7 +53,7 @@ async fn main() {
                 }
             }
             "--help" | "-h" => {
-                println!("spectradb-server - PostgreSQL wire protocol server for SpectraDB");
+                println!("tensordb-server - PostgreSQL wire protocol server for TensorDB");
                 println!();
                 println!("Usage: spectradb-server [OPTIONS]");
                 println!();
@@ -90,7 +90,7 @@ async fn main() {
         }
     };
 
-    info!("SpectraDB pgwire server listening on {addr}");
+    info!("TensorDB pgwire server listening on {addr}");
     info!("Connect with: psql -h localhost -p {port} -U spectra");
 
     let conn_counter = AtomicU32::new(1);

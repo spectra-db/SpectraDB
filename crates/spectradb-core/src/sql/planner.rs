@@ -260,7 +260,7 @@ fn estimate_selectivity(expr: &Expr, row_count: u64) -> f64 {
     }
 }
 
-/// Cost constants (in arbitrary units, calibrated to SpectraDB operations).
+/// Cost constants (in arbitrary units, calibrated to TensorDB operations).
 const POINT_LOOKUP_COST: f64 = 1.0;
 const _PREFIX_SCAN_PER_ROW: f64 = 0.5;
 const FULL_SCAN_PER_ROW: f64 = 1.0;

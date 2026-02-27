@@ -5,14 +5,14 @@ import starlight from '@astrojs/starlight';
 const noSitemap = { name: '@astrojs/sitemap', hooks: {} };
 
 export default defineConfig({
-  site: 'https://spectradb.netlify.app',
+  site: 'https://tensordb.netlify.app',
   integrations: [
     noSitemap,
     starlight({
-      title: 'SpectraDB',
-      description: 'Documentation for SpectraDB — the AI-native bitemporal ledger database',
+      title: 'TensorDB',
+      description: 'Documentation for TensorDB — the AI-native bitemporal ledger database',
       social: {
-        github: 'https://github.com/spectra-db/SpectraDB',
+        github: 'https://github.com/tensor-db/TensorDB',
       },
       customCss: ['./src/assets/custom-theme.css'],
       head: [],

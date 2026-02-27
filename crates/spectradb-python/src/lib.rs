@@ -42,6 +42,48 @@ impl PyDatabase {
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
+    /// Translate a natural language question to SQL via the embedded LLM,
+    /// then execute it. Returns `{"sql": "...", "result": ...}`.
+    #[cfg(feature = "llm")]
+    fn ask(&self, py: Python<'_>, question: &str) -> PyResult<PyObject> {
+        let (sql, result) = self
+            .db
+            .ask(question)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let dict = pyo3::types::PyDict::new_bound(py);
+        dict.set_item("sql", &sql)?;
+        let py_result = match result {
+            SqlResult::Rows(rows) => {
+                let py_rows: Vec<PyObject> = rows
+                    .into_iter()
+                    .map(|row| {
+                        if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&row) {
+                            json_to_py(py, &val)
+                        } else {
+                            let s = String::from_utf8_lossy(&row).to_string();
+                            s.to_object(py)
+                        }
+                    })
+                    .collect();
+                pyo3::types::PyList::new_bound(py, &py_rows).to_object(py)
+            }
+            SqlResult::Affected {
+                rows,
+                commit_ts,
+                message,
+            } => {
+                let d = pyo3::types::PyDict::new_bound(py);
+                d.set_item("rows", rows)?;
+                d.set_item("commit_ts", commit_ts)?;
+                d.set_item("message", message)?;
+                d.to_object(py)
+            }
+            SqlResult::Explain(text) => text.to_object(py),
+        };
+        dict.set_item("result", py_result)?;
+        Ok(dict.to_object(py))
+    }
+
     fn sql(&self, py: Python<'_>, query: &str) -> PyResult<PyObject> {
         let result = self
             .db
@@ -105,7 +147,7 @@ fn json_to_py(py: Python<'_>, val: &serde_json::Value) -> PyObject {
 }
 
 #[pymodule]
-fn spectradb_python(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn tensordb(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyDatabase>()?;
     Ok(())
 }

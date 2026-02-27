@@ -13,18 +13,11 @@
   <!-- Outer hexagonal frame -->
   <polygon points="64,4 118,34 118,94 64,124 10,94 10,34"
            stroke="url(#grad)" stroke-width="4" fill="none" stroke-linejoin="round" />
-  <!-- Stylized geometric "S" -->
-  <path d="
-    M 82 32
-    L 46 32
-    C 36 32 30 40 30 48
-    C 30 56 36 64 46 64
-    L 82 64
-    C 92 64 98 72 98 80
-    C 98 88 92 96 82 96
-    L 46 96
-  "
-  stroke="url(#grad-accent)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+  <!-- Stylized geometric "T" -->
+  <line x1="30" y1="36" x2="98" y2="36"
+        stroke="url(#grad-accent)" stroke-width="10" stroke-linecap="round" />
+  <line x1="64" y1="36" x2="64" y2="96"
+        stroke="url(#grad-accent)" stroke-width="10" stroke-linecap="round" />
   <!-- Top-right accent dot -->
   <circle cx="90" cy="28" r="4" fill="#3B82F6" />
   <!-- Bottom-left accent dot -->

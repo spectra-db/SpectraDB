@@ -1,4 +1,4 @@
-//! Comprehensive benchmark suite: SpectraDB vs SQLite vs sled vs redb
+//! Comprehensive benchmark suite: TensorDB vs SQLite vs sled vs redb
 //!
 //! Covers: point writes, point reads, batch writes, prefix scans, mixed workloads.
 
@@ -10,7 +10,7 @@ const POPULATION: u64 = 10_000;
 const BATCH_SIZE: u64 = 100;
 
 // ---------------------------------------------------------------------------
-// SpectraDB benchmarks
+// TensorDB benchmarks
 // ---------------------------------------------------------------------------
 
 fn spectradb_point_write(c: &mut Criterion) {
@@ -552,7 +552,7 @@ fn throughput_reads(c: &mut Criterion) {
     let mut group = c.benchmark_group("throughput_point_read");
 
     for size in [1_000u64, 10_000, 50_000] {
-        // SpectraDB
+        // TensorDB
         let dir = TempDir::new().unwrap();
         let db = Database::open(
             dir.path(),

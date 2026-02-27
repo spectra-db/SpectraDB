@@ -2,10 +2,10 @@
 draft: false
 head: []
 title: Full-Text Search
-description: Built-in full-text search with tokenization and relevance scoring in SpectraDB.
+description: Built-in full-text search with tokenization and relevance scoring in TensorDB.
 ---
 
-SpectraDB includes a built-in full-text search (FTS) engine as a facet alongside the relational SQL surface.
+TensorDB includes a built-in full-text search (FTS) engine as a facet alongside the relational SQL surface.
 
 ## Creating an FTS Index
 
@@ -18,7 +18,7 @@ db.create_fts_index("articles/")?;
 
 ```rust
 db.put("articles/1", Value::Text(
-    "SpectraDB is a bitemporal database with MVCC support".into()
+    "TensorDB is a bitemporal database with MVCC support".into()
 ))?;
 
 db.put("articles/2", Value::Text(

@@ -2,10 +2,10 @@
 draft: false
 head: []
 title: Compression
-description: LZ4 block compression for SSTables in SpectraDB.
+description: LZ4 block compression for SSTables in TensorDB.
 ---
 
-SpectraDB uses LZ4 block compression to reduce SSTable disk usage while maintaining fast read performance.
+TensorDB uses LZ4 block compression to reduce SSTable disk usage while maintaining fast read performance.
 
 ## LZ4
 
@@ -32,7 +32,7 @@ Block-level compression allows random access — you don't need to decompress th
 
 ## Space Savings
 
-Typical compression ratios for SpectraDB data:
+Typical compression ratios for TensorDB data:
 
 | Data Type | Ratio | Explanation |
 |-----------|-------|-------------|

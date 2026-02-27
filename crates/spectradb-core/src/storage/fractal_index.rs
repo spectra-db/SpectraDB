@@ -25,7 +25,7 @@
 //! - B-tree databases (PostgreSQL, MySQL): single index structure per table
 //! - LSM databases (RocksDB): bloom filter + sorted runs, no hash index
 //! - Hash databases (Redis, LMDB): no range scan support
-//! - SpectraDB: per-key-prefix AI-routed dual-index with minimal memory overhead
+//! - TensorDB: per-key-prefix AI-routed dual-index with minimal memory overhead
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicU64, Ordering};
