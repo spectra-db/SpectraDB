@@ -46,7 +46,7 @@ cargo bench --bench multi_engine
 
 | Crate | Purpose |
 |-------|---------|
-| `spectradb-core` | Database engine: storage, SQL, AI runtime, facets (~15k lines) |
+| `spectradb-core` | Database engine: storage, SQL, AI runtime, facets (~31k lines) |
 | `spectradb-cli` | Interactive shell with TAB completion and output modes |
 | `spectradb-server` | PostgreSQL wire protocol server (pgwire) |
 | `spectradb-native` | Optional C++ acceleration via cxx (behind `--features native`) |

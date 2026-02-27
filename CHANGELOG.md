@@ -200,7 +200,7 @@ All notable changes to SpectraDB are documented in this file.
 ## [0.3] — Storage & Performance
 
 ### Added
-- Multi-level compaction with size-budgeted leveling (L0 → L7)
+- Multi-level compaction with size-budgeted leveling (L0 → L6)
 - Block and index caching with configurable memory budgets (LRU)
 - Prefix compression and restart points in SSTable blocks
 - Write-batch API for atomic multi-key bulk ingest
