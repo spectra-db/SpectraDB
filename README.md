@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>An AI-native, bitemporal ledger database with MVCC, full SQL, vector search, and sub-microsecond performance.</strong>
+  <strong>An AI-native, bitemporal ledger database with MVCC, full SQL, real transactions, PITR, vector search, and sub-microsecond performance.</strong>
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@
 
 TensorDB is an embedded database written in Rust that treats every write as an immutable fact. It separates **system time** (when data was recorded) from **business-valid time** (when data was true), giving you built-in time travel and auditability with zero application-level bookkeeping.
 
-**41,000+ lines of Rust** | **224+ integration tests** | **30 test suites** | **7 workspace crates**
+**41,000+ lines of Rust** | **698 tests** | **33 test suites** | **7 workspace crates**
 
 ## Performance
 
@@ -44,11 +44,15 @@ cargo bench --bench basic          # Microbenchmarks
 
 ### Core Database
 - **Immutable Fact Ledger** — Append-only WAL with CRC-framed records. Data is never overwritten.
-- **MVCC Snapshot Reads** — Query any past state with `AS OF <commit_ts>`.
+- **EOAC Transactions** — Epoch-Ordered Append-Only Concurrency with global epoch counter, `BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT`.
+- **MVCC Snapshot Reads** — Query any past state with `AS OF <commit_ts>` or `AS OF EPOCH <n>`.
+- **Point-in-Time Recovery** — `SELECT ... AS OF EPOCH <n>` for cross-shard consistent snapshots.
+- **Incremental Backup** — `BACKUP TO '<path>' SINCE EPOCH <n>` for delta exports.
 - **Bitemporal Filtering** — SQL:2011 `SYSTEM_TIME` and `APPLICATION_TIME` temporal clauses.
 - **LSM Storage Engine** — Memtable → SSTable (L0–L6) with bloom filters, prefix compression, mmap reads, LZ4 block compression.
 - **Block & Index Caching** — LRU caches with configurable memory budgets.
 - **Write Batch API** — Atomic multi-key writes with a single WAL frame.
+- **Encryption at Rest** — AES-256-GCM block-level encryption (`--features encryption`).
 
 ### SQL Engine
 - **Full SQL** — DDL, DML, SELECT, JOINs (inner/left/right/cross), GROUP BY, HAVING, CTEs, subqueries, UNION/INTERSECT/EXCEPT, window functions, CASE, CAST, LIKE/ILIKE, transactions.
@@ -231,11 +235,19 @@ COPY accounts TO '/tmp/accounts.csv' FORMAT CSV;
 COPY accounts FROM '/tmp/accounts.csv' FORMAT CSV;
 SELECT * FROM read_parquet('data.parquet');
 
--- Transactions
+-- Transactions with savepoints
 BEGIN;
 UPDATE accounts SET balance = balance - 100 WHERE id = 1;
+SAVEPOINT sp1;
 UPDATE accounts SET balance = balance + 100 WHERE id = 2;
+ROLLBACK TO sp1;
 COMMIT;
+
+-- Point-in-time recovery via epochs
+SELECT * FROM accounts AS OF EPOCH 5;
+
+-- Incremental backup (export changes since epoch 3)
+BACKUP TO '/tmp/backup.json' SINCE EPOCH 3;
 
 -- Schema management
 ALTER TABLE accounts ADD COLUMN email TEXT;
@@ -296,7 +308,7 @@ ANALYZE accounts;
 
 ## Architecture
 
-TensorDB is organized around three core principles: **immutable truth** (the append-only ledger), **temporal indexing** (bitemporal metadata on every fact), and **faceted queries** (pluggable query planes over the same data).
+TensorDB is organized around four core principles: **immutable truth** (the append-only ledger), **epoch ordering** (global epoch counter unifying transactions, MVCC, and recovery), **temporal indexing** (bitemporal metadata on every fact), and **faceted queries** (pluggable query planes over the same data).
 
 ```mermaid
 graph TB
@@ -418,6 +430,8 @@ graph TB
 | Multi-level compaction | Size-budgeted leveling reduces read amplification while preserving all temporal versions |
 | Direct shard reads | ShardReadHandle bypasses the actor channel entirely for sub-microsecond reads |
 | Dual schema modes | JSON documents for flexibility; typed columns for structure and performance |
+| Epoch-ordered concurrency | Global epoch counter unifies transactions, PITR, and incremental backup under one mechanism |
+| Cross-shard epoch sync | advance_epoch() bumps all shard commit counters for consistent cross-shard point-in-time snapshots |
 
 ## Configuration
 
@@ -599,6 +613,12 @@ Raft consensus (`RaftNode` with leader election, vote, log replication), cluster
 Lock-free `FastWritePath` bypassing crossbeam channel (1.9 µs writes, 20x faster than SQLite). Group-commit WAL via `DurabilityThread` with one fdatasync per batch cycle. Automatic fallback to channel path on backpressure or subscriber activity.
 </details>
 
+<details>
+<summary><strong>v0.29 — EOAC Architecture</strong></summary>
+
+Epoch-Ordered Append-Only Concurrency: global epoch counter (AtomicU64) unifying transactions, MVCC, recovery, and time travel. `BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT` with epoch-numbered commits. `SELECT ... AS OF EPOCH <n>` for cross-shard point-in-time recovery. `BACKUP TO '<path>' SINCE EPOCH <n>` for incremental backup. TXN_COMMIT markers with max_commit_ts for epoch→snapshot resolution. Cross-shard epoch synchronization via `bump_commit_counter()`. Encryption at rest with AES-256-GCM (`--features encryption`).
+</details>
+
 ## Roadmap
 
 > **Strategy**: Fix foundations → Make it fast → Own the niche (bitemporal + AI + embedded) → Speak Postgres → Then expand.
@@ -638,7 +658,7 @@ tensordb/
 │   ├── tensordb-native/         # Optional C++ acceleration (cxx)
 │   ├── tensordb-python/         # Python bindings (PyO3 / maturin)
 │   └── tensordb-node/           # Node.js bindings (napi-rs)
-├── tests/                       # 224+ integration tests across 30 suites
+├── tests/                       # 698 tests across 33 suites
 ├── benches/                     # Criterion benchmarks (basic, comparative, multi-engine)
 ├── examples/                    # quickstart.rs, bitemporal.rs, ai_native.rs
 ├── docs/                        # Interactive documentation site (Starlight/Astro)

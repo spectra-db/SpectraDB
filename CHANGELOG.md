@@ -2,6 +2,28 @@
 
 All notable changes to TensorDB are documented in this file.
 
+## [0.29] — EOAC Architecture: Transactions, PITR, Incremental Backup
+
+### Added
+- **Epoch-Ordered Append-Only Concurrency (EOAC)** — Global `AtomicU64` epoch counter unifying transactions, MVCC, recovery, and time travel
+- `BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT` transactions with epoch-numbered commits
+- `SELECT ... AS OF EPOCH <n>` for cross-shard point-in-time recovery
+- `BACKUP TO '<path>' SINCE EPOCH <n>` for incremental backup (delta export since a given epoch)
+- `BACKUP TO '<path>'` / `RESTORE FROM '<path>'` for full backup and restore
+- `TXN_COMMIT` markers storing `max_commit_ts` for epoch→snapshot resolution
+- Cross-shard epoch synchronization via `bump_commit_counter()` — ensures PITR correctness across shards
+- `Database::advance_epoch()` API for manual epoch advancement
+- `Database::current_epoch()` API for querying the current epoch
+- **Encryption at rest** — AES-256-GCM block-level encryption for SSTable data and WAL frames (`--features encryption`)
+- `EncryptionKey` with passphrase derivation (SHA-256) and key file support (32-byte raw or 64-char hex)
+- WAL epoch tracking: `replay_until_epoch()`, `replay_epoch_range()`, `max_epoch()` methods
+- 23 new integration tests in `tests/epoch_core.rs` covering transactions, PITR, and incremental backup
+
+### Changed
+- `advance_epoch()` now bumps all shard commit counters to the epoch value for cross-shard consistency
+- Transaction `COMMIT` stores `max_commit_ts` (maximum across all writes) instead of `last_commit_ts`
+- Query planner: `#[allow(clippy::too_many_arguments)]` on multi-parameter join functions
+
 ## [0.2.0] — Embedded LLM: Natural Language → SQL
 
 ### Added
