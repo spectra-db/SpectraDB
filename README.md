@@ -9,14 +9,15 @@
 <p align="center">
   <a href="https://github.com/tensor-db/tensorDB/actions"><img src="https://github.com/tensor-db/tensorDB/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm--Noncommercial-blue.svg" alt="License: PolyForm Noncommercial"></a>
+  <a href="https://pypi.org/project/tensordb/"><img src="https://img.shields.io/pypi/v/tensordb.svg" alt="PyPI"></a>
+  <a href="https://www.npmjs.com/package/tensordb"><img src="https://img.shields.io/npm/v/tensordb.svg" alt="npm"></a>
+  <a href="https://crates.io/crates/tensordb"><img src="https://img.shields.io/crates/v/tensordb.svg" alt="crates.io"></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/rust-stable-orange.svg" alt="Rust"></a>
 </p>
 
 ---
 
-TensorDB is an embedded database written in Rust that treats every write as an immutable fact. It separates **system time** (when data was recorded) from **business-valid time** (when data was true), giving you built-in time travel and auditability with zero application-level bookkeeping.
-
-**41,000+ lines of Rust** | **698 tests** | **33 test suites** | **7 workspace crates**
+TensorDB is an embedded database that treats every write as an immutable fact. It separates **system time** (when data was recorded) from **business-valid time** (when data was true), giving you built-in time travel, auditability, and point-in-time recovery with zero application-level bookkeeping. Written in Rust, it ships as a library for Rust, Python, and Node.js — no server process required.
 
 ## Performance
 
@@ -38,6 +39,81 @@ Benchmarks use Criterion 0.5. Run them yourself:
 cargo bench --bench comparative    # TensorDB vs SQLite
 cargo bench --bench multi_engine   # TensorDB vs SQLite vs sled vs redb
 cargo bench --bench basic          # Microbenchmarks
+```
+
+## Install
+
+```bash
+# Python
+pip install tensordb
+
+# Node.js
+npm install tensordb
+
+# Rust
+cargo add tensordb
+
+# Interactive CLI
+cargo install tensordb-cli
+cargo run -p tensordb-cli -- --path ./mydb
+
+# PostgreSQL wire protocol server
+cargo run -p tensordb-server -- --data-dir ./mydb --port 5433
+```
+
+## Quickstart
+
+```sql
+-- Create a typed table
+CREATE TABLE accounts (id INTEGER PRIMARY KEY, name TEXT NOT NULL, balance REAL);
+INSERT INTO accounts (id, name, balance) VALUES (1, 'alice', 1000.0), (2, 'bob', 500.0);
+
+-- Standard SQL: joins, window functions, CTEs
+SELECT a.name, e.doc FROM accounts a
+JOIN events e ON a.name = e.doc->>'user';
+
+SELECT name, balance, ROW_NUMBER() OVER (ORDER BY balance DESC) AS rank FROM accounts;
+
+WITH high_value AS (SELECT * FROM accounts WHERE balance > 500)
+SELECT * FROM high_value;
+
+-- Time travel: read state as of a specific commit or epoch
+SELECT * FROM accounts AS OF 1;
+SELECT * FROM accounts AS OF EPOCH 5;
+
+-- Bitemporal: SQL:2011 temporal queries
+SELECT * FROM accounts FOR SYSTEM_TIME AS OF 1;
+SELECT * FROM accounts FOR APPLICATION_TIME AS OF 1000;
+
+-- Transactions with savepoints
+BEGIN;
+UPDATE accounts SET balance = balance - 100 WHERE id = 1;
+SAVEPOINT sp1;
+UPDATE accounts SET balance = balance + 100 WHERE id = 2;
+ROLLBACK TO sp1;
+COMMIT;
+
+-- Full-text search
+CREATE FULLTEXT INDEX idx_docs ON events (doc);
+SELECT pk, HIGHLIGHT(doc, 'signup') FROM events WHERE MATCH(doc, 'signup');
+
+-- Time-series
+CREATE TIMESERIES TABLE metrics (ts TIMESTAMP, value REAL) WITH (bucket_size = '1h');
+SELECT TIME_BUCKET('1h', ts), AVG(value) FROM metrics GROUP BY 1;
+
+-- Data interchange
+COPY accounts TO '/tmp/accounts.csv' FORMAT CSV;
+SELECT * FROM read_parquet('data.parquet');
+
+-- Incremental backup
+BACKUP TO '/tmp/backup.json' SINCE EPOCH 3;
+```
+
+```bash
+# Run built-in examples
+cargo run --example quickstart     # Core features: SQL, time-travel, prepared statements
+cargo run --example bitemporal     # Bitemporal ledger: AS OF + VALID AT queries
+cargo run --example ai_native      # AI runtime: insights, risk scoring, query planning
 ```
 
 ## Key Features
@@ -138,173 +214,6 @@ Immutable append-only storage with bitemporal queries satisfies audit and compli
 </td>
 </tr>
 </table>
-
-## Install
-
-```bash
-# Python
-pip install tensordb
-
-# Node.js
-npm install tensordb
-
-# Rust
-cargo add tensordb
-```
-
-## Quickstart
-
-```bash
-# Run examples
-cargo run --example quickstart     # Core features: SQL, time-travel, prepared statements
-cargo run --example bitemporal     # Bitemporal ledger: AS OF + VALID AT queries
-cargo run --example ai_native      # AI runtime: insights, risk scoring, query planning
-
-# Build and launch interactive shell
-cargo build -p tensordb-cli
-cargo run -p tensordb-cli -- --path ./mydb
-
-# Launch with AI auto-insights enabled
-cargo run -p tensordb-cli -- --path ./mydb --ai-auto-insights
-
-# Start PostgreSQL wire protocol server
-cargo run -p tensordb-server -- --data-dir ./mydb --port 5433
-```
-
-```sql
--- Create a typed table
-CREATE TABLE accounts (id INTEGER PRIMARY KEY, name TEXT NOT NULL, balance REAL);
-
-INSERT INTO accounts (id, name, balance) VALUES (1, 'alice', 1000.0);
-INSERT INTO accounts (id, name, balance) VALUES (2, 'bob', 500.0);
-
--- JSON document table
-CREATE TABLE events (pk TEXT PRIMARY KEY);
-INSERT INTO events (pk, doc) VALUES ('evt-1', '{"type":"signup","user":"alice"}');
-INSERT INTO events (pk, doc) VALUES ('evt-2', '{"type":"purchase","user":"bob","amount":49.99}');
-
--- Standard SQL
-SELECT * FROM accounts WHERE balance > 500 ORDER BY name;
-SELECT count(*), sum(balance) FROM accounts;
-SELECT pk, doc FROM events ORDER BY pk LIMIT 10;
-
--- Joins
-SELECT a.name, e.doc FROM accounts a
-JOIN events e ON a.name = e.doc->>'user'
-ORDER BY a.name;
-
--- Window functions
-SELECT name, balance,
-  ROW_NUMBER() OVER (ORDER BY balance DESC) AS rank,
-  LAG(balance) OVER (ORDER BY balance) AS prev_balance
-FROM accounts;
-
--- CTEs
-WITH high_value AS (
-  SELECT * FROM accounts WHERE balance > 500
-)
-SELECT * FROM high_value;
-
--- Time travel: read state as of commit 1
-SELECT doc FROM events WHERE pk='evt-1' AS OF 1;
-
--- Bitemporal: SQL:2011 temporal queries
-SELECT * FROM events FOR SYSTEM_TIME AS OF 1;
-SELECT * FROM events FOR SYSTEM_TIME FROM 1 TO 10;
-SELECT * FROM events FOR APPLICATION_TIME AS OF 1000;
-
--- Full-text search
-CREATE FULLTEXT INDEX idx_events ON events (doc);
-SELECT pk, doc FROM events WHERE MATCH(doc, 'signup');
-SELECT HIGHLIGHT(doc, 'signup') FROM events WHERE MATCH(doc, 'signup');
-
--- Time-series
-CREATE TIMESERIES TABLE metrics (ts TIMESTAMP, value REAL) WITH (bucket_size = '1h');
-SELECT TIME_BUCKET('1h', ts), AVG(value) FROM metrics GROUP BY 1;
-
--- Prepared statements
--- $1, $2 are bound at execution time
-SELECT * FROM accounts WHERE balance > $1;
-
--- EXPLAIN / EXPLAIN ANALYZE
-EXPLAIN SELECT * FROM accounts WHERE id = 1;
-EXPLAIN ANALYZE SELECT * FROM accounts ORDER BY balance DESC LIMIT 5;
-
--- Data interchange
-COPY accounts TO '/tmp/accounts.csv' FORMAT CSV;
-COPY accounts FROM '/tmp/accounts.csv' FORMAT CSV;
-SELECT * FROM read_parquet('data.parquet');
-
--- Transactions with savepoints
-BEGIN;
-UPDATE accounts SET balance = balance - 100 WHERE id = 1;
-SAVEPOINT sp1;
-UPDATE accounts SET balance = balance + 100 WHERE id = 2;
-ROLLBACK TO sp1;
-COMMIT;
-
--- Point-in-time recovery via epochs
-SELECT * FROM accounts AS OF EPOCH 5;
-
--- Incremental backup (export changes since epoch 3)
-BACKUP TO '/tmp/backup.json' SINCE EPOCH 3;
-
--- Schema management
-ALTER TABLE accounts ADD COLUMN email TEXT;
-SHOW TABLES;
-DESCRIBE accounts;
-ANALYZE accounts;
-```
-
-## SQL Function Reference
-
-<details>
-<summary><strong>String Functions (17)</strong></summary>
-
-`UPPER`, `LOWER`, `LENGTH`, `SUBSTR`/`SUBSTRING`, `TRIM`, `LTRIM`, `RTRIM`, `REPLACE`, `CONCAT`, `CONCAT_WS`, `LEFT`, `RIGHT`, `LPAD`, `RPAD`, `REVERSE`, `SPLIT_PART`, `REPEAT`, `POSITION`/`STRPOS`, `INITCAP`
-</details>
-
-<details>
-<summary><strong>Numeric Functions (13)</strong></summary>
-
-`ABS`, `ROUND`, `CEIL`/`CEILING`, `FLOOR`, `MOD`, `POWER`/`POW`, `SQRT`, `LOG`/`LOG10`, `LN`, `EXP`, `SIGN`, `RANDOM`, `PI`
-</details>
-
-<details>
-<summary><strong>Date/Time Functions (5)</strong></summary>
-
-`NOW`/`CURRENT_TIMESTAMP`, `EPOCH`, `EXTRACT`/`DATE_PART`, `DATE_TRUNC`, `TO_CHAR`
-</details>
-
-<details>
-<summary><strong>Aggregate Functions (10)</strong></summary>
-
-`COUNT(*)`/`COUNT(col)`/`COUNT(DISTINCT col)`, `SUM`, `AVG`, `MIN`, `MAX`, `STRING_AGG`/`GROUP_CONCAT`, `STDDEV_POP`, `STDDEV_SAMP`, `VAR_POP`, `VAR_SAMP`
-</details>
-
-<details>
-<summary><strong>Window Functions (5)</strong></summary>
-
-`ROW_NUMBER()`, `RANK()`, `DENSE_RANK()`, `LEAD()`, `LAG()`
-</details>
-
-<details>
-<summary><strong>Time-Series Functions (6)</strong></summary>
-
-`TIME_BUCKET`, `TIME_BUCKET_GAPFILL`, `LOCF`, `INTERPOLATE`, `DELTA`, `RATE`
-</details>
-
-<details>
-<summary><strong>Full-Text Search Functions (2)</strong></summary>
-
-`MATCH(column, query)`, `HIGHLIGHT(column, query)`
-</details>
-
-<details>
-<summary><strong>Conditional & Utility (7)</strong></summary>
-
-`COALESCE`, `NULLIF`, `GREATEST`, `LEAST`, `IF`/`IIF`, `TYPEOF`, `CAST`
-</details>
 
 ## Architecture
 
@@ -433,6 +342,56 @@ graph TB
 | Epoch-ordered concurrency | Global epoch counter unifies transactions, PITR, and incremental backup under one mechanism |
 | Cross-shard epoch sync | advance_epoch() bumps all shard commit counters for consistent cross-shard point-in-time snapshots |
 
+## SQL Function Reference
+
+<details>
+<summary><strong>String Functions (17)</strong></summary>
+
+`UPPER`, `LOWER`, `LENGTH`, `SUBSTR`/`SUBSTRING`, `TRIM`, `LTRIM`, `RTRIM`, `REPLACE`, `CONCAT`, `CONCAT_WS`, `LEFT`, `RIGHT`, `LPAD`, `RPAD`, `REVERSE`, `SPLIT_PART`, `REPEAT`, `POSITION`/`STRPOS`, `INITCAP`
+</details>
+
+<details>
+<summary><strong>Numeric Functions (13)</strong></summary>
+
+`ABS`, `ROUND`, `CEIL`/`CEILING`, `FLOOR`, `MOD`, `POWER`/`POW`, `SQRT`, `LOG`/`LOG10`, `LN`, `EXP`, `SIGN`, `RANDOM`, `PI`
+</details>
+
+<details>
+<summary><strong>Date/Time Functions (5)</strong></summary>
+
+`NOW`/`CURRENT_TIMESTAMP`, `EPOCH`, `EXTRACT`/`DATE_PART`, `DATE_TRUNC`, `TO_CHAR`
+</details>
+
+<details>
+<summary><strong>Aggregate Functions (10)</strong></summary>
+
+`COUNT(*)`/`COUNT(col)`/`COUNT(DISTINCT col)`, `SUM`, `AVG`, `MIN`, `MAX`, `STRING_AGG`/`GROUP_CONCAT`, `STDDEV_POP`, `STDDEV_SAMP`, `VAR_POP`, `VAR_SAMP`
+</details>
+
+<details>
+<summary><strong>Window Functions (5)</strong></summary>
+
+`ROW_NUMBER()`, `RANK()`, `DENSE_RANK()`, `LEAD()`, `LAG()`
+</details>
+
+<details>
+<summary><strong>Time-Series Functions (6)</strong></summary>
+
+`TIME_BUCKET`, `TIME_BUCKET_GAPFILL`, `LOCF`, `INTERPOLATE`, `DELTA`, `RATE`
+</details>
+
+<details>
+<summary><strong>Full-Text Search Functions (2)</strong></summary>
+
+`MATCH(column, query)`, `HIGHLIGHT(column, query)`
+</details>
+
+<details>
+<summary><strong>Conditional & Utility (7)</strong></summary>
+
+`COALESCE`, `NULLIF`, `GREATEST`, `LEAST`, `IF`/`IIF`, `TYPEOF`, `CAST`
+</details>
+
 ## Configuration
 
 TensorDB is configured through the `Config` struct. All parameters have sensible defaults.
@@ -467,174 +426,6 @@ TensorDB is configured through the `Config` struct. All parameters have sensible
 
 </details>
 
-## Completed Releases
-
-<details>
-<summary><strong>v0.1 — Initial Release</strong></summary>
-
-Core database: append-only ledger, WAL, memtable, SSTable, bloom filters, MVCC reads, bitemporal filtering, basic SQL (CREATE TABLE, INSERT, SELECT, AS OF, VALID AT), interactive CLI shell.
-</details>
-
-<details>
-<summary><strong>v0.2 — Query Engine</strong></summary>
-
-Expression AST with full precedence parsing, `WHERE` clauses, `UPDATE`/`DELETE`, `JOIN` (inner/left/right/cross), aggregates (`SUM`, `AVG`, `MIN`, `MAX`), `GROUP BY`, `HAVING`.
-</details>
-
-<details>
-<summary><strong>v0.3 — Storage & Performance</strong></summary>
-
-Multi-level compaction (L0–L6), block and index caching (LRU), prefix compression, write-batch API, SIMD-accelerated bloom probes (`--features simd`).
-</details>
-
-<details>
-<summary><strong>v0.4 — SQL Surface & Developer Experience</strong></summary>
-
-Subqueries, CTEs, window functions (ROW_NUMBER, RANK, DENSE_RANK, LEAD, LAG), typed column schema, columnar row encoding, index-backed execution, `COPY`, Python bindings, Node.js bindings.
-</details>
-
-<details>
-<summary><strong>v0.5 — Ecosystem</strong></summary>
-
-Full-text search facet, time-series facet, streaming change feeds, io_uring async I/O (`--features io-uring`), comparative benchmark harness.
-</details>
-
-<details>
-<summary><strong>v0.6–v0.7 — Storage & SQL Correctness</strong></summary>
-
-Manifest persistence with level metadata, block/index cache wired into SSTable reader, immutable memtable queue, binary search fix, typed delete tombstones, WAL rotation, numeric ORDER BY fix, transaction-local reads, window function evaluation order.
-</details>
-
-<details>
-<summary><strong>v0.9 — Storage Performance</strong></summary>
-
-LZ4 block compression (SSTable V2), adaptive compression, LRU eviction for block cache, predicate pushdown, parallel memtable flush, batched WAL fsync, bloom FP tracking.
-</details>
-
-<details>
-<summary><strong>v0.10 — Query Engine Performance</strong></summary>
-
-Cost-based query planner (`PlanNode` tree), `EXPLAIN ANALYZE` with execution metrics, prepared statements with `$N` parameters, table statistics via `ANALYZE`, per-column stats with histograms.
-</details>
-
-<details>
-<summary><strong>v0.11 — Temporal SQL:2011</strong></summary>
-
-`FOR SYSTEM_TIME AS OF`, `FROM...TO`, `BETWEEN...AND`, `ALL`. `FOR APPLICATION_TIME AS OF`, `FROM...TO`, `BETWEEN...AND`. Full SQL:2011 bitemporal query compliance.
-</details>
-
-<details>
-<summary><strong>v0.13 — Full-Text Search SQL</strong></summary>
-
-`CREATE FULLTEXT INDEX`, `MATCH()` with BM25 ranking, multi-column FTS with per-column boosting, `HIGHLIGHT()` with match markers, automatic posting list maintenance on INSERT/UPDATE/DELETE.
-</details>
-
-<details>
-<summary><strong>v0.14 — Time-Series SQL</strong></summary>
-
-`CREATE TIMESERIES TABLE`, `TIME_BUCKET()`, `TIME_BUCKET_GAPFILL()`, `LOCF`, `INTERPOLATE`, `DELTA`, `RATE`, `first()`/`last()` time-weighted aggregates.
-</details>
-
-<details>
-<summary><strong>v0.15 — PostgreSQL Wire Protocol</strong></summary>
-
-`tensordb-server` crate with pgwire v3 protocol, simple and extended query modes, type OID mapping, password authentication. Connect with any PostgreSQL client.
-</details>
-
-<details>
-<summary><strong>v0.17 — SQL Completeness</strong></summary>
-
-`CASE WHEN`, `CAST`, `UNION`/`INTERSECT`/`EXCEPT`, `INSERT...RETURNING`, `CREATE TABLE AS SELECT`, 17 string functions, 13 math functions, 6 date/time functions, `NULLIF`/`GREATEST`/`LEAST`/`IF`, `STDDEV`/`VARIANCE` aggregates, `LIKE`/`ILIKE`.
-</details>
-
-<details>
-<summary><strong>v0.18 — Data Interchange</strong></summary>
-
-Parquet read/write via `COPY TO/FROM`, CSV with RFC 4180, NDJSON streaming, `read_parquet()`/`read_csv()`/`read_json()` table functions, Arrow in-memory columnar format.
-</details>
-
-<details>
-<summary><strong>v0.19 — Vectorized Execution</strong></summary>
-
-Columnar `RecordBatch` representation, vectorized filter/project/aggregate/join/sort operators, selection vector operations, null-aware ordering.
-</details>
-
-<details>
-<summary><strong>v0.20 — Columnar Storage (Partial)</strong></summary>
-
-Zone maps (per-block min/max + HLL distinct count), dictionary encoding for low-cardinality columns, `APPROX_COUNT_DISTINCT` via HyperLogLog.
-</details>
-
-<details>
-<summary><strong>v0.21 — Change Data Capture v2</strong></summary>
-
-Durable cursors (`DurableCursor`) with at-least-once delivery, consumer groups (`ConsumerGroupManager`) with round-robin shard assignment and rebalancing, exactly-once ACK semantics.
-</details>
-
-<details>
-<summary><strong>v0.22 — Event Sourcing</strong></summary>
-
-`create_event_store()`, `append_event()`, `get_events()`, aggregate projections with `get_aggregate_state()`, snapshot support, idempotency keys, `find_aggregates_by_event_type()`.
-</details>
-
-<details>
-<summary><strong>v0.23 — Authentication & Authorization</strong></summary>
-
-User management (create, authenticate, disable, change password), role-based access control with built-in admin/reader/writer roles, table-level permissions, privilege checking, session management with token-based TTL.
-</details>
-
-<details>
-<summary><strong>v0.24 — Connection Pooling</strong></summary>
-
-Configurable connection pool with warmup, LIFO reuse, idle eviction, RAII connection guards, pool statistics.
-</details>
-
-<details>
-<summary><strong>v0.25 — Monitoring & Diagnostics</strong></summary>
-
-Metrics registry (counters, gauges, HDR histograms), slow query log, timer guard, JSON-serializable metrics snapshots.
-</details>
-
-<details>
-<summary><strong>v0.26 — Schema Evolution</strong></summary>
-
-Migration manager (register, apply, rollback, apply_all), schema version registry with per-table column history, schema diff.
-</details>
-
-<details>
-<summary><strong>v0.27 — Replication Foundations</strong></summary>
-
-Raft consensus (`RaftNode` with leader election, vote, log replication), cluster membership (`NodeRegistry`), shard assignment with configurable replication factor.
-</details>
-
-<details>
-<summary><strong>v0.28 — Fast Write Engine</strong></summary>
-
-Lock-free `FastWritePath` bypassing crossbeam channel (1.9 µs writes, 20x faster than SQLite). Group-commit WAL via `DurabilityThread` with one fdatasync per batch cycle. Automatic fallback to channel path on backpressure or subscriber activity.
-</details>
-
-<details>
-<summary><strong>v0.29 — EOAC Architecture</strong></summary>
-
-Epoch-Ordered Append-Only Concurrency: global epoch counter (AtomicU64) unifying transactions, MVCC, recovery, and time travel. `BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT` with epoch-numbered commits. `SELECT ... AS OF EPOCH <n>` for cross-shard point-in-time recovery. `BACKUP TO '<path>' SINCE EPOCH <n>` for incremental backup. TXN_COMMIT markers with max_commit_ts for epoch→snapshot resolution. Cross-shard epoch synchronization via `bump_commit_counter()`. Encryption at rest with AES-256-GCM (`--features encryption`).
-</details>
-
-## Roadmap
-
-> **Strategy**: Fix foundations → Make it fast → Own the niche (bitemporal + AI + embedded) → Speak Postgres → Then expand.
-
-### Upcoming
-
-- **AI Runtime v2** — Pluggable model backends (ONNX, HTTP), anomaly detection, pattern learning, cross-shard correlation
-- **Advanced Vector Search** — `VECTOR(n)` column type, IVF-PQ for billion-scale, hybrid search (vector + BM25 + temporal)
-- **ML Pipelines** — In-database feature store, model registry, training data export, inference UDFs
-- **Encryption & Compliance** — AES-256-GCM encryption at rest, key rotation, column-level encryption, audit log, GDPR erasure
-- **Cloud-Native** — S3 storage backend, Helm chart, Kubernetes operator, compute-storage separation
-- **Horizontal Scaling** — Distributed shard routing, online rebalancing, distributed transactions
-- **v1.0 Stable Release** — Stable on-disk format, Jepsen testing, TPC-H/YCSB benchmarks, crates.io/PyPI/npm publishing
-
-See the full roadmap with per-version feature tracking in the [design.md](design.md).
-
 ## Project Structure
 
 ```
@@ -665,24 +456,6 @@ tensordb/
 ├── scripts/                     # Benchmark matrix, AI overhead gate, overnight burn-in
 └── .github/workflows/ci.yml     # CI: fmt, clippy, test, AI overhead gate
 ```
-
-## Documentation
-
-**[Interactive Documentation Site](docs/)** — 58 pages with live SQL playground, animated architecture diagrams, performance comparisons, and interactive configuration explorer.
-
-```bash
-cd docs && npm install && npm run dev
-# Opens at http://localhost:4321
-```
-
-| Document | Description |
-|----------|-------------|
-| [docs/](docs/) | Interactive documentation site (Starlight/Astro) |
-| [design.md](design.md) | Internal architecture, data model, storage format |
-| [perf.md](perf.md) | Tuning knobs, benchmark methodology, optimization notes |
-| [TEST_PLAN.md](TEST_PLAN.md) | Correctness, recovery, temporal, and soak test strategy |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup and contribution guidelines |
-| [CHANGELOG.md](CHANGELOG.md) | Release history |
 
 ## Building
 
@@ -725,12 +498,53 @@ cd crates/tensordb-node && npm run build
 cd docs && npm install && npm run build
 ```
 
+## Documentation
+
+**[Interactive Documentation Site](docs/)** — 58 pages with live SQL playground, animated architecture diagrams, performance comparisons, and interactive configuration explorer.
+
+```bash
+cd docs && npm install && npm run dev
+# Opens at http://localhost:4321
+```
+
+| Document | Description |
+|----------|-------------|
+| [docs/](docs/) | Interactive documentation site (Starlight/Astro) |
+| [design.md](design.md) | Internal architecture, data model, storage format |
+| [perf.md](perf.md) | Tuning knobs, benchmark methodology, optimization notes |
+| [TEST_PLAN.md](TEST_PLAN.md) | Correctness, recovery, temporal, and soak test strategy |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup and contribution guidelines |
+| [CHANGELOG.md](CHANGELOG.md) | Release history |
+
 ## CI Pipeline
 
 Two jobs run on every push and PR to `main`:
 
 1. **test-rust** — `cargo fmt --check` → `cargo clippy -D warnings` → `cargo test --workspace` → AI overhead gate script
 2. **test-native** — C++ toolchain → `cargo clippy --features native` → `cargo test --features native`
+
+## Roadmap
+
+> **Strategy**: Fix foundations → Make it fast → Own the niche (bitemporal + AI + embedded) → Speak Postgres → Then expand.
+
+### Done
+
+- **Encryption at Rest** — AES-256-GCM block-level encryption (`--features encryption`)
+- **Embedded LLM** — Qwen3 0.6B via llama-cpp-2, feature-gated (`--features llm`)
+- **EOAC Transactions** — Real `BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT` with epoch-ordered concurrency
+- **Point-in-Time Recovery** — `AS OF EPOCH` cross-shard consistent snapshots + incremental backup
+
+### Upcoming
+
+- **AI Runtime v2** — Pluggable model backends (ONNX, HTTP), anomaly detection, pattern learning, cross-shard correlation
+- **Advanced Vector Search** — `VECTOR(n)` column type, IVF-PQ for billion-scale, hybrid search (vector + BM25 + temporal)
+- **ML Pipelines** — In-database feature store, model registry, training data export, inference UDFs
+- **Key Rotation & Column Encryption** — Encryption key rotation, column-level encryption, GDPR erasure support
+- **Cloud-Native** — S3 storage backend, Helm chart, Kubernetes operator, compute-storage separation
+- **Horizontal Scaling** — Distributed shard routing, online rebalancing, distributed transactions
+- **v1.0 Stable Release** — Stable on-disk format, Jepsen testing, TPC-H/YCSB benchmarks
+
+See the full roadmap with per-version feature tracking in the [design.md](design.md).
 
 ## Contributing
 
