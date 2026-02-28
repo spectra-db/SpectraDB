@@ -1,7 +1,5 @@
 # EOAC Critical Gaps Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Close all 5 critical gaps (transactions, index acceleration, N-way JOINs, concurrency, recovery) using the Epoch-Ordered Append-Only Concurrency (EOAC) architecture.
 
 **Architecture:** A global epoch counter (`AtomicU64`) unifies transactions, MVCC, and recovery. Intent buffers provide zero-cost rollback. Predicate-to-index matching enables automatic index acceleration. N-way JOIN chains with greedy reordering beat naive execution. WAL records carry epoch+txn_id for crash-safe transactions and PITR.
@@ -1853,9 +1851,9 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace --all-targets
 ```
 
-**Step 2: Update memory file with EOAC architecture**
+**Step 2: Update documentation with EOAC architecture**
 
-Update `~/.claude/projects/-home-walebadr-tensorDB/memory/MEMORY.md` with:
+Document the following:
 - Global epoch architecture
 - Transaction model (intent-based with savepoints)
 - Index acceleration (predicate-to-index matching)
