@@ -38,8 +38,6 @@ pub struct Config {
     pub llm_schema_cache_ttl_secs: u64,
     /// Enable SQL grammar-constrained decoding (default: true).
     pub llm_grammar_constrained: bool,
-    /// Enable KV cache prefix reuse for repeated schema contexts (default: true).
-    pub llm_kv_cache_prefix: bool,
     // Encryption at rest
     /// Passphrase for AES-256-GCM encryption. If set, SSTable blocks and WAL frames
     /// are encrypted transparently. Requires the `encryption` feature flag.
@@ -87,7 +85,6 @@ impl Default for Config {
             llm_context_size: 2048,
             llm_schema_cache_ttl_secs: 60,
             llm_grammar_constrained: true,
-            llm_kv_cache_prefix: true,
             encryption_passphrase: None,
             encryption_key_file: None,
             vector_hnsw_m: 16,

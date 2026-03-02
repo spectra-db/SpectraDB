@@ -1,20 +1,29 @@
 /// Comprehensive LLM NL->SQL tests: easy -> hard.
 ///
 /// These tests require the `llm` feature and a GGUF model file.
-/// Set `LLM_MODEL_PATH` env var to override the model, otherwise
-/// the default Qwen3-0.6B-Q8_0 is used.
+/// Set `LLM_MODEL_PATH` env var to point to a model, otherwise tests are skipped.
 ///
 /// Run:
-///   cargo test --test llm_nl2sql -- --test-threads=1
-///
-/// With a custom model:
 ///   LLM_MODEL_PATH=/path/to/model.gguf cargo test --test llm_nl2sql -- --test-threads=1
 #[cfg(feature = "llm")]
 mod tests {
     use tensordb_core::config::Config;
     use tensordb_core::engine::db::Database;
 
-    fn open_test_db(name: &str) -> Database {
+    /// Check if an LLM model file is available for testing.
+    /// Tests are skipped when no model is present to avoid CI failures.
+    fn model_available() -> bool {
+        std::env::var("LLM_MODEL_PATH")
+            .ok()
+            .map(|p| std::path::Path::new(&p).exists())
+            .unwrap_or(false)
+    }
+
+    fn open_test_db(name: &str) -> Option<Database> {
+        if !model_available() {
+            eprintln!("Skipping: no LLM model file found (set LLM_MODEL_PATH)");
+            return None;
+        }
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(name);
         let _ = std::fs::create_dir_all(&path);
@@ -52,7 +61,7 @@ mod tests {
 
         // Leak tempdir so it doesn't get deleted
         std::mem::forget(dir);
-        db
+        Some(db)
     }
 
     /// Helper: generate SQL from question, print it, and optionally execute.
@@ -102,7 +111,9 @@ mod tests {
 
     #[test]
     fn t1_show_tables() {
-        let db = open_test_db("t1_show");
+        let Some(db) = open_test_db("t1_show") else {
+            return;
+        };
         let (sql, result) = ask_and_report(&db, "What tables exist?");
         assert!(
             sql_contains(&sql, &["SHOW"]) || sql_contains(&sql, &["TABLE"]),
@@ -113,7 +124,9 @@ mod tests {
 
     #[test]
     fn t1_count_all_users() {
-        let db = open_test_db("t1_count");
+        let Some(db) = open_test_db("t1_count") else {
+            return;
+        };
         let (sql, result) = ask_and_report(&db, "How many users are there?");
         assert!(
             sql_contains(&sql, &["SELECT", "COUNT", "users"]),
@@ -125,7 +138,9 @@ mod tests {
 
     #[test]
     fn t1_select_all_products() {
-        let db = open_test_db("t1_products");
+        let Some(db) = open_test_db("t1_products") else {
+            return;
+        };
         let (sql, result) = ask_and_report(&db, "Show me all products");
         assert!(
             sql_contains(&sql, &["SELECT", "products"]),
@@ -140,7 +155,9 @@ mod tests {
 
     #[test]
     fn t2_filter_by_role() {
-        let db = open_test_db("t2_role");
+        let Some(db) = open_test_db("t2_role") else {
+            return;
+        };
         let (sql, result) = ask_and_report(&db, "List all admin users");
         assert!(
             sql_contains(&sql, &["SELECT", "users", "admin"]),
@@ -151,7 +168,9 @@ mod tests {
 
     #[test]
     fn t2_order_by() {
-        let db = open_test_db("t2_order");
+        let Some(db) = open_test_db("t2_order") else {
+            return;
+        };
         let (sql, result) =
             ask_and_report(&db, "Show products sorted by price from highest to lowest");
         assert!(
@@ -163,7 +182,9 @@ mod tests {
 
     #[test]
     fn t2_total_revenue() {
-        let db = open_test_db("t2_revenue");
+        let Some(db) = open_test_db("t2_revenue") else {
+            return;
+        };
         let (sql, result) = ask_and_report(&db, "What is the total amount of all orders?");
         assert!(
             sql_contains(&sql, &["SELECT", "SUM", "amount", "orders"]),
@@ -174,7 +195,9 @@ mod tests {
 
     #[test]
     fn t2_limit() {
-        let db = open_test_db("t2_limit");
+        let Some(db) = open_test_db("t2_limit") else {
+            return;
+        };
         let (sql, result) = ask_and_report(&db, "Show the top 3 most expensive products");
         assert!(
             sql_contains(&sql, &["SELECT", "products", "ORDER", "LIMIT"]),
@@ -189,7 +212,9 @@ mod tests {
 
     #[test]
     fn t3_join_users_orders() {
-        let db = open_test_db("t3_join");
+        let Some(db) = open_test_db("t3_join") else {
+            return;
+        };
         let (sql, result) = ask_and_report(&db, "Show each user's name and their order products");
         assert!(
             sql_contains(&sql, &["SELECT", "JOIN", "users", "orders"]),
@@ -200,7 +225,9 @@ mod tests {
 
     #[test]
     fn t3_group_by_with_count() {
-        let db = open_test_db("t3_groupby");
+        let Some(db) = open_test_db("t3_groupby") else {
+            return;
+        };
         let (sql, result) = ask_and_report(&db, "How many orders does each user have?");
         assert!(
             sql_contains(&sql, &["SELECT", "COUNT", "GROUP BY"]),
@@ -211,7 +238,9 @@ mod tests {
 
     #[test]
     fn t3_multi_condition() {
-        let db = open_test_db("t3_multi");
+        let Some(db) = open_test_db("t3_multi") else {
+            return;
+        };
         let (sql, result) = ask_and_report(
             &db,
             "Find orders that are shipped and have amount greater than 20",
@@ -225,7 +254,9 @@ mod tests {
 
     #[test]
     fn t3_aggregate_with_join() {
-        let db = open_test_db("t3_agg_join");
+        let Some(db) = open_test_db("t3_agg_join") else {
+            return;
+        };
         let (sql, result) = ask_and_report(
             &db,
             "What is the total order amount per user? Show user names.",
@@ -243,7 +274,9 @@ mod tests {
 
     #[test]
     fn t4_having_clause() {
-        let db = open_test_db("t4_having");
+        let Some(db) = open_test_db("t4_having") else {
+            return;
+        };
         let (sql, result) = ask_and_report(&db, "Which users have placed more than 1 order?");
         assert!(
             sql_contains(&sql, &["SELECT", "COUNT", "GROUP BY"]),
@@ -254,7 +287,9 @@ mod tests {
 
     #[test]
     fn t4_subquery() {
-        let db = open_test_db("t4_subquery");
+        let Some(db) = open_test_db("t4_subquery") else {
+            return;
+        };
         let (sql, _result) = ask_and_report(&db, "Find users who have never placed an order");
         assert!(
             sql_contains(&sql, &["SELECT", "users"]),
@@ -264,7 +299,9 @@ mod tests {
 
     #[test]
     fn t4_case_expression() {
-        let db = open_test_db("t4_case");
+        let Some(db) = open_test_db("t4_case") else {
+            return;
+        };
         let (sql, _result) = ask_and_report(
             &db,
             "Categorize orders: amounts under 30 as 'cheap', 30-50 as 'mid', over 50 as 'expensive'",
@@ -281,7 +318,9 @@ mod tests {
 
     #[test]
     fn t5_window_function() {
-        let db = open_test_db("t5_window");
+        let Some(db) = open_test_db("t5_window") else {
+            return;
+        };
         let (sql, _result) = ask_and_report(
             &db,
             "Rank users by their total order spend, showing their name and rank",
@@ -294,7 +333,9 @@ mod tests {
 
     #[test]
     fn t5_cte() {
-        let db = open_test_db("t5_cte");
+        let Some(db) = open_test_db("t5_cte") else {
+            return;
+        };
         let (sql, _result) = ask_and_report(
             &db,
             "Using a CTE, first calculate each user's total spend, then show only users who spent more than 30",
@@ -308,7 +349,9 @@ mod tests {
 
     #[test]
     fn t5_temporal_query() {
-        let db = open_test_db("t5_temporal");
+        let Some(db) = open_test_db("t5_temporal") else {
+            return;
+        };
         let (sql, _result) = ask_and_report(
             &db,
             "Show the state of the users table as it was at commit timestamp 1",
@@ -322,7 +365,9 @@ mod tests {
 
     #[test]
     fn t5_describe_table() {
-        let db = open_test_db("t5_describe");
+        let Some(db) = open_test_db("t5_describe") else {
+            return;
+        };
         let (sql, result) = ask_and_report(&db, "What columns does the orders table have?");
         assert!(
             sql_contains(&sql, &["DESCRIBE", "orders"]) || sql_contains(&sql, &["SHOW", "orders"]),
@@ -333,7 +378,9 @@ mod tests {
 
     #[test]
     fn t5_complex_multi_join() {
-        let db = open_test_db("t5_complex");
+        let Some(db) = open_test_db("t5_complex") else {
+            return;
+        };
         let (sql, _result) = ask_and_report(
             &db,
             "Show each user's name, their orders, and the product category for each order. Join users, orders, and products.",
@@ -350,7 +397,9 @@ mod tests {
 
     #[test]
     fn t6_ambiguous_natural_language() {
-        let db = open_test_db("t6_ambiguous");
+        let Some(db) = open_test_db("t6_ambiguous") else {
+            return;
+        };
         let (sql, _result) = ask_and_report(&db, "Who spent the most?");
         assert!(
             !sql.is_empty(),
@@ -360,7 +409,9 @@ mod tests {
 
     #[test]
     fn t6_insert_generation() {
-        let db = open_test_db("t6_insert");
+        let Some(db) = open_test_db("t6_insert") else {
+            return;
+        };
         let (sql, result) = ask_and_report(
             &db,
             "Add a new user named 'frank' with email 'frank@example.com' and role 'user'",
@@ -379,7 +430,9 @@ mod tests {
 
     #[test]
     fn t6_update_generation() {
-        let db = open_test_db("t6_update");
+        let Some(db) = open_test_db("t6_update") else {
+            return;
+        };
         let (sql, _result) = ask_and_report(&db, "Change bob's role to 'admin'");
         assert!(
             sql_contains(&sql, &["UPDATE", "users", "admin", "bob"]),
@@ -393,7 +446,9 @@ mod tests {
 
     #[test]
     fn scorecard() {
-        let db = open_test_db("scorecard");
+        let Some(db) = open_test_db("scorecard") else {
+            return;
+        };
 
         let questions: Vec<(&str, &str, Vec<&str>)> = vec![
             ("TRIVIAL", "What tables are available?", vec!["SHOW"]),

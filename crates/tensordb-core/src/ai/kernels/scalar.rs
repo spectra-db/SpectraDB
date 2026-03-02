@@ -11,7 +11,11 @@ pub fn q8_0_matvec(data: &[u8], input: &[f32], output: &mut [f32], rows: usize, 
     const BLOCK_SIZE: usize = 32;
     const BLOCK_BYTES: usize = 34;
     let blocks_per_row = cols / BLOCK_SIZE;
-    debug_assert_eq!(cols % BLOCK_SIZE, 0, "cols must be a multiple of BLOCK_SIZE");
+    debug_assert_eq!(
+        cols % BLOCK_SIZE,
+        0,
+        "cols must be a multiple of BLOCK_SIZE"
+    );
     debug_assert!(output.len() >= rows, "output too small for {rows} rows");
     debug_assert!(input.len() >= cols, "input too small for {cols} cols");
     debug_assert!(
@@ -24,8 +28,7 @@ pub fn q8_0_matvec(data: &[u8], input: &[f32], output: &mut [f32], rows: usize, 
         let row_offset = r * blocks_per_row * BLOCK_BYTES;
         for b in 0..blocks_per_row {
             let block = &data[row_offset + b * BLOCK_BYTES..];
-            let scale =
-                half::f16::from_bits(u16::from_le_bytes([block[0], block[1]])).to_f32();
+            let scale = half::f16::from_bits(u16::from_le_bytes([block[0], block[1]])).to_f32();
             let input_offset = b * BLOCK_SIZE;
             let mut block_sum = 0.0f32;
             for j in 0..BLOCK_SIZE {
@@ -48,7 +51,11 @@ pub fn q4_0_matvec(data: &[u8], input: &[f32], output: &mut [f32], rows: usize, 
     const BLOCK_SIZE: usize = 32;
     const BLOCK_BYTES: usize = 18;
     let blocks_per_row = cols / BLOCK_SIZE;
-    debug_assert_eq!(cols % BLOCK_SIZE, 0, "cols must be a multiple of BLOCK_SIZE");
+    debug_assert_eq!(
+        cols % BLOCK_SIZE,
+        0,
+        "cols must be a multiple of BLOCK_SIZE"
+    );
     debug_assert!(output.len() >= rows, "output too small for {rows} rows");
     debug_assert!(input.len() >= cols, "input too small for {cols} cols");
     debug_assert!(
@@ -61,8 +68,7 @@ pub fn q4_0_matvec(data: &[u8], input: &[f32], output: &mut [f32], rows: usize, 
         let row_offset = r * blocks_per_row * BLOCK_BYTES;
         for b in 0..blocks_per_row {
             let block = &data[row_offset + b * BLOCK_BYTES..];
-            let scale =
-                half::f16::from_bits(u16::from_le_bytes([block[0], block[1]])).to_f32();
+            let scale = half::f16::from_bits(u16::from_le_bytes([block[0], block[1]])).to_f32();
             let input_offset = b * BLOCK_SIZE;
             let mut block_sum = 0.0f32;
             for j in 0..16 {
@@ -116,8 +122,7 @@ pub fn fused_rmsnorm_q8_0_matvec(
         let row_offset = r * blocks_per_row * BLOCK_BYTES;
         for b in 0..blocks_per_row {
             let block = &weight_data[row_offset + b * BLOCK_BYTES..];
-            let scale =
-                half::f16::from_bits(u16::from_le_bytes([block[0], block[1]])).to_f32();
+            let scale = half::f16::from_bits(u16::from_le_bytes([block[0], block[1]])).to_f32();
             let input_offset = b * BLOCK_SIZE;
             let mut block_sum = 0.0f32;
             for j in 0..BLOCK_SIZE {

@@ -93,6 +93,7 @@ impl GgufDtype {
             GgufDtype::Q5_1 => 24,
             GgufDtype::Q8_0 => 34, // 2 bytes scale + 32 bytes data
             GgufDtype::Q8_1 => 40,
+            GgufDtype::Q6K => 210, // 128 (ql) + 64 (qh) + 16 (scales) + 2 (d f16)
             GgufDtype::I8 => 1,
             GgufDtype::I16 => 2,
             GgufDtype::I32 => 4,
@@ -398,6 +399,51 @@ pub fn read_f32(data: &[u8], n_elements: usize) -> Vec<f32> {
     out
 }
 
+/// Dequantize Q6_K block data to f32.
+///
+/// Q6_K format: 256 elements per super-block, 210 bytes per block.
+/// Layout: `ql[128]` (low 4 bits), `qh[64]` (high 2 bits), `scales[16]` (int8), `d` (f16 super-scale).
+#[allow(clippy::needless_range_loop)]
+pub fn dequant_q6_k(data: &[u8], n_elements: usize) -> Vec<f32> {
+    const BLOCK_SIZE: usize = 256;
+    const BLOCK_BYTES: usize = 210;
+
+    let n_blocks = n_elements / BLOCK_SIZE;
+    let mut out = Vec::with_capacity(n_elements);
+
+    for i in 0..n_blocks {
+        let block = &data[i * BLOCK_BYTES..];
+        let ql = &block[0..128]; // low 4 bits for each of 256 values (2 per byte via lo/hi nibble)
+        let qh = &block[128..192]; // high 2 bits for each of 256 values (4 per byte, 2 bits each)
+        let scales = &block[192..208]; // 16 int8 scales for 16 sub-blocks of 16 values
+        let d_bits = u16::from_le_bytes([block[208], block[209]]);
+        let d = half::f16::from_bits(d_bits).to_f32();
+
+        for sub in 0..16 {
+            let sc = scales[sub] as i8 as f32;
+            for j in 0..16 {
+                let idx = sub * 16 + j;
+                // Low 4 bits: ql stores two nibbles per byte
+                let ql_byte = ql[idx / 2];
+                let lo4 = if idx % 2 == 0 {
+                    (ql_byte & 0x0F) as i32
+                } else {
+                    ((ql_byte >> 4) & 0x0F) as i32
+                };
+                // High 2 bits: qh packs 4 values per byte (2 bits each)
+                let qh_byte = qh[idx / 4];
+                let shift = (idx % 4) * 2;
+                let hi2 = ((qh_byte >> shift) & 0x03) as i32;
+                let q = (hi2 << 4) | lo4; // 6-bit unsigned value (0..63)
+                let q = q - 32; // center to signed range (-32..31)
+                out.push(d * sc * q as f32);
+            }
+        }
+    }
+
+    out
+}
+
 /// Dequantize tensor data to f32 based on its dtype.
 pub fn dequant_tensor(data: &[u8], dtype: GgufDtype, n_elements: usize) -> Result<Vec<f32>> {
     match dtype {
@@ -405,6 +451,7 @@ pub fn dequant_tensor(data: &[u8], dtype: GgufDtype, n_elements: usize) -> Resul
         GgufDtype::F16 => Ok(dequant_f16(data, n_elements)),
         GgufDtype::Q8_0 => Ok(dequant_q8_0(data, n_elements)),
         GgufDtype::Q4_0 => Ok(dequant_q4_0(data, n_elements)),
+        GgufDtype::Q6K => Ok(dequant_q6_k(data, n_elements)),
         _ => Err(TensorError::LlmError(format!(
             "unsupported quantization format for dequantization: {:?}",
             dtype

@@ -193,13 +193,14 @@ cargo run --example ai_native      # AI runtime: insights, risk scoring, query p
 - **Pure-Rust LLM Inference** — Custom inference engine (~3.3K LoC) running Qwen3-0.6B entirely in-process. No C++ toolchain, no llama.cpp, no external model servers. Implements the full stack: GGUF v3 parser, BPE tokenizer, Qwen2 transformer with GQA + RoPE + SwiGLU, KV cache, and token sampling — all in safe Rust.
 - **`ASK` — Natural Language to SQL** — `ASK 'show me the top 10 customers by revenue'` translates to SQL and executes in one step. The database uses its own schema metadata to prompt the model, so it always knows your tables and columns.
 - **SQL Grammar-Constrained Decoding** — Unlike general-purpose inference engines, TensorDB biases token generation toward valid SQL at every decoding step. The grammar decoder penalizes non-SQL tokens, reducing invalid outputs without requiring retries.
-- **Purpose-Built Inference Optimizations** — Five optimizations exploit the fact that this engine only generates SQL, not general text:
-  - **Vocabulary-pruned LM head** — Only ~5K SQL-compatible tokens are scored instead of the full 151K vocab (**30x** faster per token)
+- **Purpose-Built Inference Optimizations** — Six optimizations exploit the fact that this engine only generates SQL, not general text:
+  - **Vocabulary-pruned LM head** — Only ~5K SQL-compatible tokens are scored instead of the full 151K vocab (**22x** faster per token)
   - **Vec\<bool\> grammar mask** — O(1) array indexing replaces per-token HashSet lookups (**20x** faster than HashSet)
   - **SIMD matvec** — AVX2/NEON-accelerated quantized matrix-vector multiply (**2.7x** on NEON, up to 4x on AVX2)
-  - **RoPE frequency precomputation** — Table lookup replaces per-head `powf()` calls (**3x** faster)
+  - **Rayon-parallelized matvec** — All matrix-vector multiplies distribute rows across cores (**5.3x** on multi-core)
+  - **RoPE frequency precomputation** — Table lookup replaces per-head `powf()` calls (**3.3x** faster)
   - **Scratch buffer reuse** — Zero per-token heap allocations (all buffers pre-allocated)
-- **Schema-Aware KV Cache Reuse** — The system prompt + schema context is forward-passed once and the resulting KV cache state is reused across queries. When your schema hasn't changed, subsequent `ASK` calls skip ~80% of the inference work (~3-15x faster than cold calls).
+- **Table-Filtered Schema Context** — Schema context is automatically pruned to only the tables relevant to each question, keeping prompts short for optimal 0.6B model performance.
 - **Schema Cache with DDL Invalidation** — Schema context is cached with a configurable TTL and automatically invalidated on `CREATE TABLE`, `DROP TABLE`, or `ALTER TABLE`.
 - **Background Insight Synthesis** — In-process AI pipeline consuming change feeds.
 - **Inline Risk Scoring** — Per-write risk assessment without external model servers.
@@ -220,8 +221,8 @@ Most databases that embed AI wrap an existing C/C++ inference library (PostgresM
 | **GPU** | CPU only | CUDA, Metal, Vulkan, 10+ backends |
 | **Quantization** | Q8_0, Q4_0, F16, F32 | 30+ formats including sub-2-bit |
 | **Grammar** | SQL-specific soft constraints | GBNF formal grammar (any grammar) |
-| **SQL-mode perf** | **30x faster per-token** via vocab pruning + grammar fusion (1.8 ms/tok vs 56.5 ms/tok baseline) | Full-vocab LM head on every token regardless of task |
-| **Schema integration** | Direct access to database metadata, KV cache reuse across calls with same schema | External process, no schema awareness |
+| **SQL-mode perf** | **15x faster per-token** via vocab pruning + rayon parallelism (347 µs/tok vs 5.1 ms/tok baseline) | Full-vocab LM head on every token regardless of task |
+| **Schema integration** | Direct access to database metadata, table-filtered schema context | External process, no schema awareness |
 | **Cross-compilation** | Pure Rust — compiles anywhere Rust does | Platform-specific C++ toolchain per target |
 
 The trade-off is intentional: TensorDB's engine is not a general-purpose inference runtime. It runs one model family on CPU for one task (NL-to-SQL). In exchange, it compiles with `cargo build`, cross-compiles trivially, has zero unsafe C++ dependencies, and integrates directly with the database's schema metadata and query engine. Because the engine knows it's generating SQL — not prose — it prunes the vocabulary from 151K tokens to ~5K, skipping 97% of the most expensive per-token computation. A general-purpose engine can't make that trade.
@@ -233,14 +234,14 @@ The trade-off is intentional: TensorDB's engine is not a general-purpose inferen
 
 | Optimization | Before | After | Speedup |
 |---|---|---|---|
-| **LM head (per token)** | 54.9 ms (full 151K vocab) | 1.8 ms (active 5K vocab) | **30.3x** |
-| **Grammar apply (per token)** | 1.03 ms (HashSet 151K lookups) | 50.7 µs (Vec\<bool\> mask) | **20.3x** |
-| **RoPE (per token)** | 4.2 µs (inline `powf`) | 1.4 µs (precomputed freqs) | **3.0x** |
-| **Q8_0 matvec 1024x1024** | 365 µs (scalar) | 136 µs (NEON SIMD) | **2.7x** |
-| **Scratch buffers (per token)** | 3.1 µs (10 allocs) | 2.7 µs (zero allocs) | 1.14x |
-| **End-to-end per token** | 56.5 ms (full matvec + HashSet) | **1.8 ms** (active vocab + scatter) | **30.9x** |
+| **LM head (per token)** | 54.9 ms (full 151K vocab) | 2.5 ms (active 5K vocab) | **22x** |
+| **Grammar apply (per token)** | 1.04 ms (HashSet 151K lookups) | 50.8 µs (Vec\<bool\> mask) | **20.5x** |
+| **RoPE (per token)** | 4.3 µs (inline `powf`) | 1.3 µs (precomputed freqs) | **3.3x** |
+| **Q8_0 matvec 1024x1024** | 365 µs (scalar) | 68.7 µs (NEON + rayon) | **5.3x** |
+| **Scratch buffers (per token)** | 3.0 µs (10 allocs) | 2.7 µs (zero allocs) | 1.14x |
+| **End-to-end per token** | 5.1 ms (full matvec + HashSet) | **347 µs** (active vocab + scatter) | **14.7x** |
 
-The dominant cost is the LM head matmul — a [151K × 1024] matrix-vector multiply that runs on every generated token. By recognizing that only ~5K tokens can appear in valid SQL, TensorDB computes only those 5K dot products and fills the rest with −∞. This single optimization accounts for most of the 30x improvement.
+The dominant cost is the LM head matmul — a [151K × 1024] matrix-vector multiply that runs on every generated token. By recognizing that only ~5K tokens can appear in valid SQL, TensorDB computes only those 5K dot products and fills the rest with −∞. Combined with rayon parallelism across matrix rows, this yields a ~15x end-to-end per-token speedup.
 
 Run the benchmarks yourself:
 
@@ -495,7 +496,7 @@ graph TB
 TensorDB is configured through the `Config` struct. All parameters have sensible defaults.
 
 <details>
-<summary><strong>All 26 Configuration Parameters</strong></summary>
+<summary><strong>All 25 Configuration Parameters</strong></summary>
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -524,7 +525,6 @@ TensorDB is configured through the `Config` struct. All parameters have sensible
 | `llm_context_size` | `usize` | `2048` | LLM inference context window size |
 | `llm_schema_cache_ttl_secs` | `u64` | `60` | Schema cache TTL for NL-to-SQL (seconds) |
 | `llm_grammar_constrained` | `bool` | `true` | Enable SQL grammar-constrained decoding |
-| `llm_kv_cache_prefix` | `bool` | `true` | Reuse KV cache for repeated schema prefixes |
 
 </details>
 

@@ -101,8 +101,14 @@ impl BpeTokenizer {
             .and_then(|v| v.as_u32())
             .unwrap_or(2);
 
-        // Register known special tokens by scanning vocab for ChatML tokens
-        let chatml_tokens = ["<|im_start|>", "<|im_end|>", "<|endoftext|>", "<|im_sep|>"];
+        // Register known special tokens by scanning vocab for ChatML and other model tokens
+        let chatml_tokens = [
+            "<|im_start|>",
+            "<|im_end|>",
+            "<|endoftext|>",
+            "<|im_sep|>",
+            "<|EOT|>", // DeepSeek models
+        ];
         for token_str in &chatml_tokens {
             if let Some(&id) = token_to_id.get(token_str.as_bytes()) {
                 special_tokens.insert(token_str.to_string(), id);
@@ -157,6 +163,9 @@ impl BpeTokenizer {
     }
 
     /// Decode token IDs back to a string.
+    ///
+    /// Handles GPT-2 byte-level BPE encoding: token strings use a Unicode mapping
+    /// (e.g. Ġ → space, Ċ → newline) that must be reversed to recover the original text.
     pub fn decode(&self, tokens: &[u32]) -> String {
         let mut bytes = Vec::new();
         for &id in tokens {
@@ -170,7 +179,15 @@ impl BpeTokenizer {
                         continue;
                     }
                 }
-                bytes.extend_from_slice(token_bytes);
+                // Reverse the GPT-2 byte-level Unicode encoding.
+                // Token bytes are UTF-8 encoded Unicode chars; each char maps to a byte.
+                if let Ok(s) = std::str::from_utf8(token_bytes) {
+                    for ch in s.chars() {
+                        bytes.push(gpt2_unicode_to_byte(ch));
+                    }
+                } else {
+                    bytes.extend_from_slice(token_bytes);
+                }
             }
         }
         String::from_utf8_lossy(&bytes).to_string()
@@ -181,13 +198,18 @@ impl BpeTokenizer {
         if token_id == self.eos_token_id {
             return true;
         }
-        // Also check for <|im_end|> and <|endoftext|>
+        // Also check for <|im_end|>, <|endoftext|>, and <|EOT|> (DeepSeek models)
         if let Some(&im_end_id) = self.special_tokens.get("<|im_end|>") {
             if token_id == im_end_id {
                 return true;
             }
         }
         if let Some(&eot_id) = self.special_tokens.get("<|endoftext|>") {
+            if token_id == eot_id {
+                return true;
+            }
+        }
+        if let Some(&eot_id) = self.special_tokens.get("<|EOT|>") {
             if token_id == eot_id {
                 return true;
             }
@@ -210,9 +232,38 @@ impl BpeTokenizer {
         self.vocab.get(id as usize).map(|v| v.as_slice())
     }
 
-    /// Get token ID for a string.
+    /// Get token ID for a plain-text string.
+    ///
+    /// Applies GPT-2 byte-to-unicode encoding before lookup, so callers can
+    /// pass raw text bytes (e.g. `b" SELECT"`) and get the correct token ID.
     pub fn token_id(&self, s: &[u8]) -> Option<u32> {
-        self.token_to_id.get(s).copied()
+        // First try with GPT-2 encoding
+        let encoded: Vec<u8> = s
+            .iter()
+            .flat_map(|&b| {
+                let ch = gpt2_byte_to_unicode(b);
+                let mut buf = [0u8; 4];
+                ch.encode_utf8(&mut buf);
+                buf[..ch.len_utf8()].to_vec()
+            })
+            .collect();
+        self.token_to_id
+            .get(&encoded)
+            .copied()
+            // Fall back to raw bytes (for tokenizers that don't use GPT-2 encoding)
+            .or_else(|| self.token_to_id.get(s).copied())
+    }
+
+    /// Decode a single token's raw bytes to plain text bytes.
+    ///
+    /// Reverses the GPT-2 byte-level encoding on the token's stored bytes.
+    pub fn token_to_text(&self, id: u32) -> Option<Vec<u8>> {
+        let raw = self.vocab.get(id as usize)?;
+        if let Ok(s) = std::str::from_utf8(raw) {
+            Some(s.chars().map(gpt2_unicode_to_byte).collect())
+        } else {
+            Some(raw.clone())
+        }
     }
 
     // ── Internal BPE implementation ──────────────────────────────────
@@ -263,25 +314,24 @@ impl BpeTokenizer {
             return Vec::new();
         }
 
-        // Start with each byte as a separate token
-        let mut pieces: Vec<Vec<u8>> = text.iter().map(|&b| vec![b]).collect();
+        // Apply GPT-2 byte-to-unicode mapping: each input byte is mapped to a
+        // Unicode character, then UTF-8 encoded. This matches how tokens are
+        // stored in the GGUF vocabulary.
+        let mut pieces: Vec<Vec<u8>> = text
+            .iter()
+            .map(|&b| {
+                let ch = gpt2_byte_to_unicode(b);
+                let mut buf = [0u8; 4];
+                ch.encode_utf8(&mut buf);
+                buf[..ch.len_utf8()].to_vec()
+            })
+            .collect();
 
-        // If individual bytes aren't in vocab, try UTF-8 character boundaries
+        // Fallback: if GPT-2 mapped chars aren't in vocab, try raw bytes
         if !pieces.is_empty() && !self.token_to_id.contains_key(&pieces[0]) {
-            // Try character-level tokenization
-            let text_str = String::from_utf8_lossy(text);
-            let char_pieces: Vec<Vec<u8>> = text_str
-                .chars()
-                .map(|c| {
-                    let mut buf = [0u8; 4];
-                    c.encode_utf8(&mut buf);
-                    buf[..c.len_utf8()].to_vec()
-                })
-                .collect();
-
-            // Check if char-level pieces are in vocab
-            if char_pieces.iter().all(|p| self.token_to_id.contains_key(p)) {
-                pieces = char_pieces;
+            let raw_pieces: Vec<Vec<u8>> = text.iter().map(|&b| vec![b]).collect();
+            if raw_pieces.iter().all(|p| self.token_to_id.contains_key(p)) {
+                pieces = raw_pieces;
             }
         }
 
@@ -371,6 +421,78 @@ fn hex_nibble(b: u8) -> Option<u8> {
         b'A'..=b'F' => Some(b - b'A' + 10),
         _ => None,
     }
+}
+
+/// GPT-2 byte → Unicode char mapping (forward direction).
+///
+/// Maps each byte value (0-255) to a unique printable Unicode character.
+/// Printable ASCII (33-126) and some Latin-1 chars map directly. Remaining
+/// bytes are shifted to U+0100..U+0143 to avoid control characters.
+fn gpt2_byte_to_unicode(byte: u8) -> char {
+    let b = byte as u32;
+    // Printable ASCII (33-126): direct mapping
+    if (33..=126).contains(&b) {
+        return char::from(byte);
+    }
+    // Latin-1 supplement: 161-172, 174-255
+    if (161..=172).contains(&b) || (174..=255).contains(&b) {
+        return char::from(byte);
+    }
+    // Remaining bytes (0-32, 127-160, 173) → U+0100 + offset
+    // Count how many "direct" bytes come before this one
+    let mut offset = 0u32;
+    for check in 0..=255u32 {
+        if (33..=126).contains(&check)
+            || (161..=172).contains(&check)
+            || (174..=255).contains(&check)
+        {
+            continue; // skip direct-mapped bytes
+        }
+        if check == b {
+            return char::from_u32(0x0100 + offset).unwrap_or(char::REPLACEMENT_CHARACTER);
+        }
+        offset += 1;
+    }
+    char::REPLACEMENT_CHARACTER
+}
+
+/// Reverse the GPT-2 bytes_to_unicode mapping.
+///
+/// GPT-2 BPE uses a bijective mapping from byte values (0-255) to Unicode characters.
+/// Printable ASCII (33-126) and some Latin-1 chars map to themselves. Remaining bytes
+/// (0-32, 127-160, 173) are shifted to U+0100..U+0143.
+///
+/// This function reverses the mapping: given a Unicode char from a token string,
+/// returns the original byte value.
+fn gpt2_unicode_to_byte(ch: char) -> u8 {
+    let cp = ch as u32;
+    // Printable ASCII (33-126): direct mapping
+    if (33..=126).contains(&cp) {
+        return cp as u8;
+    }
+    // Latin-1 supplement ranges that map directly:
+    // 161-172 (¡ to ¬) and 174-255 (® to ÿ)
+    if (161..=172).contains(&cp) || (174..=255).contains(&cp) {
+        return cp as u8;
+    }
+    // Shifted range: U+0100..U+0143 → bytes 0-67 (the "remaining" bytes)
+    // The remaining bytes (in order): 0-32, 127-160, 173
+    if (0x0100..=0x0143).contains(&cp) {
+        let idx = (cp - 0x0100) as u8;
+        // Map index back to the original byte
+        // Bytes 0-32 = 33 values → indices 0-32
+        if idx <= 32 {
+            return idx;
+        }
+        // Bytes 127-160 = 34 values → indices 33-66
+        if idx <= 66 {
+            return idx - 33 + 127;
+        }
+        // Byte 173 → index 67
+        return 173;
+    }
+    // Fallback: use the raw byte (shouldn't happen for valid GPT-2 tokens)
+    (cp & 0xFF) as u8
 }
 
 #[cfg(test)]

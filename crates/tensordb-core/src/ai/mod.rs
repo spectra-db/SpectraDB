@@ -5,6 +5,8 @@ pub mod compaction_advisor;
 pub mod gguf;
 pub mod inference;
 #[cfg(feature = "llm")]
+pub mod kernels;
+#[cfg(feature = "llm")]
 pub mod llm;
 pub mod ml_pipeline;
 pub mod query_advisor;
@@ -20,8 +22,6 @@ pub mod sql_grammar;
 pub mod tokenizer;
 #[cfg(feature = "llm")]
 pub mod transformer;
-#[cfg(feature = "llm")]
-pub mod kernels;
 
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};

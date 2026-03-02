@@ -75,7 +75,7 @@ impl Hasher for NativeHasher {
 pub fn build_hasher() -> Arc<dyn Hasher + Send + Sync> {
     #[cfg(feature = "native")]
     {
-        return Arc::new(NativeHasher);
+        Arc::new(NativeHasher)
     }
 
     #[cfg(not(feature = "native"))]

@@ -38,8 +38,7 @@ pub unsafe fn q8_0_matvec(
 
         for b in 0..blocks_per_row {
             let block = &data[row_offset + b * BLOCK_BYTES..];
-            let scale =
-                half::f16::from_bits(u16::from_le_bytes([block[0], block[1]])).to_f32();
+            let scale = half::f16::from_bits(u16::from_le_bytes([block[0], block[1]])).to_f32();
 
             let input_offset = b * BLOCK_SIZE;
             let quants = &block[2..];
@@ -108,8 +107,7 @@ pub unsafe fn q4_0_matvec(
 
         for b in 0..blocks_per_row {
             let block = &data[row_offset + b * BLOCK_BYTES..];
-            let scale =
-                half::f16::from_bits(u16::from_le_bytes([block[0], block[1]])).to_f32();
+            let scale = half::f16::from_bits(u16::from_le_bytes([block[0], block[1]])).to_f32();
 
             let input_offset = b * BLOCK_SIZE;
             let quants = &block[2..];

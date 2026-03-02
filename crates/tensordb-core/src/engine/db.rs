@@ -267,8 +267,7 @@ impl Database {
                 .with_max_tokens(config.llm_max_tokens)
                 .with_context_size(config.llm_context_size)
                 .with_schema_cache_ttl(config.llm_schema_cache_ttl_secs)
-                .with_grammar_constrained(config.llm_grammar_constrained)
-                .with_kv_cache_prefix(config.llm_kv_cache_prefix);
+                .with_grammar_constrained(config.llm_grammar_constrained);
             Some(Arc::new(engine))
         };
 
@@ -553,15 +552,26 @@ impl Database {
         for table in &table_names {
             let describe_sql = format!("DESCRIBE {table}");
             if let Ok(desc) = execute_sql(self, &describe_sql) {
-                ctx.push_str(&format!("Table: {table}\n"));
+                // CREATE TABLE format — matches what the model saw in training.
+                let mut cols = Vec::new();
                 if let SqlResult::Rows(rows) = desc {
                     for row in rows {
                         if let Ok(text) = String::from_utf8(row) {
-                            ctx.push_str(&format!("  {text}\n"));
+                            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+                                let name = v.get("column").and_then(|c| c.as_str()).unwrap_or("?");
+                                let dtype =
+                                    v.get("type").and_then(|t| t.as_str()).unwrap_or("TEXT");
+                                cols.push(format!("{name} {dtype}"));
+                            } else {
+                                let trimmed = text.trim();
+                                if !trimmed.is_empty() {
+                                    cols.push(trimmed.to_string());
+                                }
+                            }
                         }
                     }
                 }
-                ctx.push('\n');
+                ctx.push_str(&format!("CREATE TABLE {table} ({});\n", cols.join(", ")));
             }
         }
 
