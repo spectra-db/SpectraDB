@@ -35,21 +35,38 @@ pub struct ModelConfig {
 
 impl ModelConfig {
     /// Extract model config from GGUF metadata.
+    ///
+    /// Auto-detects the architecture prefix from `general.architecture`
+    /// (e.g. "llama", "qwen2", "qwen3") so we read the right metadata keys.
     pub fn from_gguf(gguf: &GgufFile) -> Result<Self> {
-        let get_u32 = |key: &str| -> Result<u32> {
-            gguf.get_metadata(key)
+        // Detect architecture prefix (e.g. "llama", "qwen2", "qwen3")
+        let arch = gguf
+            .get_metadata("general.architecture")
+            .and_then(|v| v.as_str())
+            .unwrap_or("llama")
+            .to_string();
+
+        let get_u32 = |suffix: &str| -> Result<u32> {
+            let key = format!("{arch}.{suffix}");
+            gguf.get_metadata(&key)
                 .and_then(|v| v.as_u32())
                 .ok_or_else(|| TensorError::LlmError(format!("missing GGUF metadata: {key}")))
         };
+        let get_f32_opt = |suffix: &str| -> Option<f32> {
+            let key = format!("{arch}.{suffix}");
+            gguf.get_metadata(&key).and_then(|v| v.as_f32())
+        };
+        let get_u32_opt = |suffix: &str| -> Option<u32> {
+            let key = format!("{arch}.{suffix}");
+            gguf.get_metadata(&key).and_then(|v| v.as_u32())
+        };
 
-        let hidden_dim = get_u32("llama.embedding_length")? as usize;
-        let n_layers = get_u32("llama.block_count")? as usize;
-        let n_heads = get_u32("llama.attention.head_count")? as usize;
-        let n_kv_heads = get_u32("llama.attention.head_count_kv")? as usize;
-        let intermediate_dim = get_u32("llama.feed_forward_length")? as usize;
-        let vocab_size = gguf
-            .get_metadata("llama.vocab_size")
-            .and_then(|v| v.as_u32())
+        let hidden_dim = get_u32("embedding_length")? as usize;
+        let n_layers = get_u32("block_count")? as usize;
+        let n_heads = get_u32("attention.head_count")? as usize;
+        let n_kv_heads = get_u32("attention.head_count_kv")? as usize;
+        let intermediate_dim = get_u32("feed_forward_length")? as usize;
+        let vocab_size = get_u32_opt("vocab_size")
             .map(|v| v as usize)
             .unwrap_or_else(|| {
                 // Fall back to counting tokens in vocabulary
@@ -59,26 +76,23 @@ impl ModelConfig {
                     .unwrap_or(151936) // Qwen default
             });
 
-        let rope_theta = gguf
-            .get_metadata("llama.rope.freq_base")
-            .and_then(|v| v.as_f32())
-            .unwrap_or(1_000_000.0);
+        let rope_theta = get_f32_opt("rope.freq_base").unwrap_or(1_000_000.0);
 
-        let rms_norm_eps = gguf
-            .get_metadata("llama.attention.layer_norm_rms_epsilon")
-            .and_then(|v| v.as_f32())
-            .unwrap_or(1e-6);
+        let rms_norm_eps = get_f32_opt("attention.layer_norm_rms_epsilon").unwrap_or(1e-6);
 
-        let context_length = gguf
-            .get_metadata("llama.context_length")
-            .and_then(|v| v.as_u32())
-            .unwrap_or(32768) as usize;
+        let context_length = get_u32_opt("context_length").unwrap_or(32768) as usize;
 
-        let head_dim = hidden_dim / n_heads;
+        // Head dimension: prefer explicit metadata, fall back to hidden_dim / n_heads.
+        // Some models (e.g. Qwen3) have key_length > hidden_dim / n_heads.
+        let head_dim = get_u32_opt("attention.key_length")
+            .map(|v| v as usize)
+            .unwrap_or(hidden_dim / n_heads);
 
-        let rope_scale = gguf
-            .get_metadata("llama.rope.scale_linear")
-            .and_then(|v| v.as_f32())
+        // RoPE linear scaling: try both key formats used by different converters.
+        // - `{arch}.rope.scaling.factor` (standard llama.cpp ≥ b3000)
+        // - `{arch}.rope.scale_linear` (older llama.cpp / some HF converters)
+        let rope_scale = get_f32_opt("rope.scaling.factor")
+            .or_else(|| get_f32_opt("rope.scale_linear"))
             .unwrap_or(1.0);
 
         let rope_freqs: Vec<f32> = (0..head_dim / 2)
@@ -119,6 +133,9 @@ struct TransformerLayer {
     q_bias: Option<Vec<f32>>,
     k_bias: Option<Vec<f32>>,
     v_bias: Option<Vec<f32>>,
+    // QK norms (Qwen3 applies RMSNorm to Q/K per-head after projection)
+    q_norm: Option<Vec<f32>>,
+    k_norm: Option<Vec<f32>>,
     // FFN
     ffn_norm: RmsNormWeight,
     gate_proj: WeightMatrix,
@@ -471,10 +488,8 @@ impl WeightMatrix {
             let mut sum = 0.0f32;
             let row_offset = r * cols * 2;
             for c in 0..cols {
-                let bits = u16::from_le_bytes([
-                    data[row_offset + c * 2],
-                    data[row_offset + c * 2 + 1],
-                ]);
+                let bits =
+                    u16::from_le_bytes([data[row_offset + c * 2], data[row_offset + c * 2 + 1]]);
                 let w = half::f16::from_bits(bits).to_f32();
                 sum += w * input[c];
             }
@@ -554,7 +569,7 @@ impl ScratchBuffers {
             q: vec![0.0; config.n_heads * config.head_dim],
             k: vec![0.0; config.n_kv_heads * config.head_dim],
             v: vec![0.0; config.n_kv_heads * config.head_dim],
-            attn_out: vec![0.0; config.hidden_dim],
+            attn_out: vec![0.0; config.n_heads * config.head_dim],
             attn_projected: vec![0.0; config.hidden_dim],
             ffn_gate: vec![0.0; config.intermediate_dim],
             ffn_up: vec![0.0; config.intermediate_dim],
@@ -646,6 +661,8 @@ impl TransformerModel {
                 q_bias: load_optional_1d_f32(gguf, &format!("{prefix}.attn_q.bias")),
                 k_bias: load_optional_1d_f32(gguf, &format!("{prefix}.attn_k.bias")),
                 v_bias: load_optional_1d_f32(gguf, &format!("{prefix}.attn_v.bias")),
+                q_norm: load_optional_1d_f32(gguf, &format!("{prefix}.attn_q_norm.weight")),
+                k_norm: load_optional_1d_f32(gguf, &format!("{prefix}.attn_k_norm.weight")),
                 ffn_norm: RmsNormWeight {
                     weight: load_1d_f32(gguf, &format!("{prefix}.ffn_norm.weight"))?,
                 },
@@ -912,6 +929,14 @@ impl TransformerModel {
                 for (vi, bi) in scratch.v.iter_mut().zip(bias.iter()) {
                     *vi += bi;
                 }
+            }
+
+            // Apply per-head QK norms if present (Qwen3)
+            if let Some(ref qn) = layer.q_norm {
+                apply_per_head_rms_norm(&mut scratch.q, qn, n_heads, head_dim, cfg.rms_norm_eps);
+            }
+            if let Some(ref kn) = layer.k_norm {
+                apply_per_head_rms_norm(&mut scratch.k, kn, n_kv_heads, head_dim, cfg.rms_norm_eps);
             }
 
             // Apply RoPE to Q and K
@@ -1203,6 +1228,28 @@ fn softmax(x: &mut [f32]) {
         let inv_sum = 1.0 / sum;
         for v in x.iter_mut() {
             *v *= inv_sum;
+        }
+    }
+}
+
+/// Apply RMSNorm per-head to Q or K vectors (Qwen3 QK normalization).
+///
+/// `weight` has `head_dim` elements, shared across all heads.
+/// Each head's `head_dim` elements are independently normalized, then scaled by `weight`.
+fn apply_per_head_rms_norm(
+    qk: &mut [f32],
+    weight: &[f32],
+    n_heads: usize,
+    head_dim: usize,
+    eps: f32,
+) {
+    for h in 0..n_heads {
+        let offset = h * head_dim;
+        let head = &mut qk[offset..offset + head_dim];
+        let ss: f32 = head.iter().map(|&v| v * v).sum::<f32>() / head_dim as f32;
+        let inv_rms = 1.0 / (ss + eps).sqrt();
+        for (i, v) in head.iter_mut().enumerate() {
+            *v = weight[i] * (*v * inv_rms);
         }
     }
 }

@@ -7,7 +7,13 @@
 /// `output` are correctly sized for the given `rows` x `cols` dimensions.
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx512f")]
-pub unsafe fn q8_0_matvec(data: &[u8], input: &[f32], output: &mut [f32], rows: usize, cols: usize) {
+pub unsafe fn q8_0_matvec(
+    data: &[u8],
+    input: &[f32],
+    output: &mut [f32],
+    rows: usize,
+    cols: usize,
+) {
     super::avx2::q8_0_matvec(data, input, output, rows, cols)
 }
 
@@ -18,7 +24,13 @@ pub unsafe fn q8_0_matvec(data: &[u8], input: &[f32], output: &mut [f32], rows: 
 /// `output` are correctly sized for the given `rows` x `cols` dimensions.
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx512f")]
-pub unsafe fn q4_0_matvec(data: &[u8], input: &[f32], output: &mut [f32], rows: usize, cols: usize) {
+pub unsafe fn q4_0_matvec(
+    data: &[u8],
+    input: &[f32],
+    output: &mut [f32],
+    rows: usize,
+    cols: usize,
+) {
     super::avx2::q4_0_matvec(data, input, output, rows, cols)
 }
 

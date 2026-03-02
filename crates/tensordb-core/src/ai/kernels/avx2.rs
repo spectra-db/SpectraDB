@@ -35,8 +35,7 @@ pub unsafe fn q8_0_matvec(
 
         for b in 0..blocks_per_row {
             let block = &data[row_offset + b * BLOCK_BYTES..];
-            let scale =
-                half::f16::from_bits(u16::from_le_bytes([block[0], block[1]])).to_f32();
+            let scale = half::f16::from_bits(u16::from_le_bytes([block[0], block[1]])).to_f32();
             let scale_v = _mm256_set1_ps(scale);
 
             let input_offset = b * BLOCK_SIZE;
@@ -120,8 +119,7 @@ pub unsafe fn q4_0_matvec(
 
         for b in 0..blocks_per_row {
             let block = &data[row_offset + b * BLOCK_BYTES..];
-            let scale =
-                half::f16::from_bits(u16::from_le_bytes([block[0], block[1]])).to_f32();
+            let scale = half::f16::from_bits(u16::from_le_bytes([block[0], block[1]])).to_f32();
             let scale_v = _mm256_set1_ps(scale);
 
             let input_offset = b * BLOCK_SIZE;
@@ -144,7 +142,8 @@ pub unsafe fn q4_0_matvec(
                 // Extract lo nibbles: byte & 0x0F
                 let lo_bytes = _mm_and_si128(raw_128, _mm256_castsi256_si128(lo_mask));
                 // Extract hi nibbles: byte >> 4
-                let hi_bytes = _mm_and_si128(_mm_srli_epi16(raw_128, 4), _mm256_castsi256_si128(lo_mask));
+                let hi_bytes =
+                    _mm_and_si128(_mm_srli_epi16(raw_128, 4), _mm256_castsi256_si128(lo_mask));
 
                 // Zero-extend lo nibbles from u8 -> i16 (8 values)
                 let lo_i16 = _mm_cvtepu8_epi16(lo_bytes);

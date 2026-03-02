@@ -194,10 +194,11 @@ impl SqlGrammarDecoder {
             }
         }
 
-        // Scan vocabulary for tokens that look like valid SQL content
+        // Scan vocabulary for tokens that look like valid SQL content.
+        // Use token_to_text() to decode GPT-2 byte-level encoding first.
         for id in 0..vocab_size as u32 {
-            if let Some(token_bytes) = tokenizer.token_str(id) {
-                if is_sql_compatible(token_bytes) {
+            if let Some(decoded) = tokenizer.token_to_text(id) {
+                if is_sql_compatible(&decoded) {
                     valid_mask[id as usize] = true;
                 }
             }
