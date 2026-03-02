@@ -10,6 +10,12 @@
 
 pub mod scalar;
 
+#[cfg(target_arch = "aarch64")]
+pub mod neon;
+
+#[cfg(target_arch = "x86_64")]
+pub mod avx2;
+
 #[cfg(feature = "llm")]
 use rayon::prelude::*;
 
@@ -233,7 +239,7 @@ pub fn silu_inplace(x: &mut [f32]) {
     silu_inplace_dispatch(x);
 }
 
-// ── Internal dispatch (scalar only for now; arch kernels added later) ────
+// ── Internal dispatch (routes to best available arch kernel) ─────────────
 
 fn q8_0_matvec_dispatch(
     data: &[u8],
@@ -242,7 +248,15 @@ fn q8_0_matvec_dispatch(
     rows: usize,
     cols: usize,
 ) {
-    scalar::q8_0_matvec(data, input, output, rows, cols);
+    match best_int_kernel() {
+        #[cfg(target_arch = "aarch64")]
+        KernelTier::Neon | KernelTier::NeonDotprod | KernelTier::I8mm => unsafe {
+            neon::q8_0_matvec(data, input, output, rows, cols)
+        },
+        #[cfg(target_arch = "x86_64")]
+        KernelTier::Avx2 => unsafe { avx2::q8_0_matvec(data, input, output, rows, cols) },
+        _ => scalar::q8_0_matvec(data, input, output, rows, cols),
+    }
 }
 
 fn q4_0_matvec_dispatch(
@@ -252,15 +266,35 @@ fn q4_0_matvec_dispatch(
     rows: usize,
     cols: usize,
 ) {
-    scalar::q4_0_matvec(data, input, output, rows, cols);
+    match best_int_kernel() {
+        #[cfg(target_arch = "aarch64")]
+        KernelTier::Neon | KernelTier::NeonDotprod | KernelTier::I8mm => unsafe {
+            neon::q4_0_matvec(data, input, output, rows, cols)
+        },
+        #[cfg(target_arch = "x86_64")]
+        KernelTier::Avx2 => unsafe { avx2::q4_0_matvec(data, input, output, rows, cols) },
+        _ => scalar::q4_0_matvec(data, input, output, rows, cols),
+    }
 }
 
 fn rms_norm_dispatch(x: &[f32], weight: &[f32], eps: f32, output: &mut [f32]) {
-    scalar::rms_norm(x, weight, eps, output);
+    match best_float_kernel() {
+        #[cfg(target_arch = "aarch64")]
+        KernelTier::Neon => unsafe { neon::rms_norm(x, weight, eps, output) },
+        #[cfg(target_arch = "x86_64")]
+        KernelTier::Avx2 => unsafe { avx2::rms_norm(x, weight, eps, output) },
+        _ => scalar::rms_norm(x, weight, eps, output),
+    }
 }
 
 fn silu_inplace_dispatch(x: &mut [f32]) {
-    scalar::silu_inplace(x);
+    match best_float_kernel() {
+        #[cfg(target_arch = "aarch64")]
+        KernelTier::Neon => unsafe { neon::silu_inplace(x) },
+        #[cfg(target_arch = "x86_64")]
+        KernelTier::Avx2 => unsafe { avx2::silu_inplace(x) },
+        _ => scalar::silu_inplace(x),
+    }
 }
 
 #[cfg(test)]
@@ -307,9 +341,12 @@ mod tests {
         q8_0_matvec(&data, &input, &mut output_dispatch, rows, cols);
         scalar::q8_0_matvec(&data, &input, &mut output_scalar, rows, cols);
 
+        // Tolerance is 1e-3 because SIMD FMA fuses multiply-add without
+        // intermediate rounding, producing slightly different results than
+        // scalar separate mul + add.
         for i in 0..rows {
             assert!(
-                (output_dispatch[i] - output_scalar[i]).abs() < 1e-6,
+                (output_dispatch[i] - output_scalar[i]).abs() < 1e-3,
                 "row {i}: dispatch={} scalar={}",
                 output_dispatch[i],
                 output_scalar[i]
@@ -338,7 +375,7 @@ mod tests {
         scalar::q4_0_matvec(&data, &input, &mut output_scalar, rows, cols);
 
         assert!(
-            (output_dispatch[0] - output_scalar[0]).abs() < 1e-6,
+            (output_dispatch[0] - output_scalar[0]).abs() < 1e-3,
             "dispatch={} scalar={}",
             output_dispatch[0],
             output_scalar[0]
@@ -357,7 +394,7 @@ mod tests {
 
         for i in 0..4 {
             assert!(
-                (out_dispatch[i] - out_scalar[i]).abs() < 1e-6,
+                (out_dispatch[i] - out_scalar[i]).abs() < 1e-3,
                 "element {i}: dispatch={} scalar={}",
                 out_dispatch[i],
                 out_scalar[i]
@@ -375,7 +412,7 @@ mod tests {
 
         for i in 0..x_dispatch.len() {
             assert!(
-                (x_dispatch[i] - x_scalar[i]).abs() < 1e-6,
+                (x_dispatch[i] - x_scalar[i]).abs() < 1e-3,
                 "element {i}: dispatch={} scalar={}",
                 x_dispatch[i],
                 x_scalar[i]
