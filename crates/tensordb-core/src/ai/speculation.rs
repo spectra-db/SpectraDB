@@ -136,9 +136,7 @@ impl SqlSpeculator {
         let mut best_match: Option<(usize, &SqlTemplate)> = None;
         for template in &self.templates {
             let match_len = Self::suffix_prefix_match(output_tokens, &template.tokens);
-            if match_len > 0
-                && (best_match.is_none() || match_len > best_match.unwrap().0)
-            {
+            if match_len > 0 && (best_match.is_none() || match_len > best_match.unwrap().0) {
                 best_match = Some((match_len, template));
             }
         }

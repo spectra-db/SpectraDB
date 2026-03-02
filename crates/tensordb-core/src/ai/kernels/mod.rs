@@ -194,16 +194,13 @@ pub fn q8_0_matvec(data: &[u8], input: &[f32], output: &mut [f32], rows: usize, 
         let blocks_per_row = cols / BLOCK_SIZE;
         let row_stride = blocks_per_row * BLOCK_BYTES;
 
-        output
-            .par_iter_mut()
-            .enumerate()
-            .for_each(|(r, out)| {
-                let row_data_start = r * row_stride;
-                let row_data = &data[row_data_start..row_data_start + row_stride];
-                let mut single = [0.0f32];
-                q8_0_matvec_dispatch(row_data, input, &mut single, 1, cols);
-                *out = single[0];
-            });
+        output.par_iter_mut().enumerate().for_each(|(r, out)| {
+            let row_data_start = r * row_stride;
+            let row_data = &data[row_data_start..row_data_start + row_stride];
+            let mut single = [0.0f32];
+            q8_0_matvec_dispatch(row_data, input, &mut single, 1, cols);
+            *out = single[0];
+        });
         return;
     }
     q8_0_matvec_dispatch(data, input, output, rows, cols);
@@ -220,16 +217,13 @@ pub fn q4_0_matvec(data: &[u8], input: &[f32], output: &mut [f32], rows: usize, 
         let blocks_per_row = cols / BLOCK_SIZE;
         let row_stride = blocks_per_row * BLOCK_BYTES;
 
-        output
-            .par_iter_mut()
-            .enumerate()
-            .for_each(|(r, out)| {
-                let row_data_start = r * row_stride;
-                let row_data = &data[row_data_start..row_data_start + row_stride];
-                let mut single = [0.0f32];
-                q4_0_matvec_dispatch(row_data, input, &mut single, 1, cols);
-                *out = single[0];
-            });
+        output.par_iter_mut().enumerate().for_each(|(r, out)| {
+            let row_data_start = r * row_stride;
+            let row_data = &data[row_data_start..row_data_start + row_stride];
+            let mut single = [0.0f32];
+            q4_0_matvec_dispatch(row_data, input, &mut single, 1, cols);
+            *out = single[0];
+        });
         return;
     }
     q4_0_matvec_dispatch(data, input, output, rows, cols);
@@ -264,8 +258,7 @@ pub fn fused_rmsnorm_q8_0_matvec(
             let mut sum = 0.0f32;
             for b in 0..blocks_per_row {
                 let block = &row_data[b * BLOCK_BYTES..];
-                let scale =
-                    half::f16::from_bits(u16::from_le_bytes([block[0], block[1]])).to_f32();
+                let scale = half::f16::from_bits(u16::from_le_bytes([block[0], block[1]])).to_f32();
                 let input_offset = b * BLOCK_SIZE;
                 let mut block_sum = 0.0f32;
                 for j in 0..BLOCK_SIZE {
@@ -294,13 +287,7 @@ pub fn silu_inplace(x: &mut [f32]) {
 
 // ── Internal dispatch (routes to best available arch kernel) ─────────────
 
-fn q8_0_matvec_dispatch(
-    data: &[u8],
-    input: &[f32],
-    output: &mut [f32],
-    rows: usize,
-    cols: usize,
-) {
+fn q8_0_matvec_dispatch(data: &[u8], input: &[f32], output: &mut [f32], rows: usize, cols: usize) {
     match best_int_kernel() {
         #[cfg(target_arch = "aarch64")]
         KernelTier::I8mm => unsafe { i8mm::q8_0_matvec(data, input, output, rows, cols) },
@@ -318,13 +305,7 @@ fn q8_0_matvec_dispatch(
     }
 }
 
-fn q4_0_matvec_dispatch(
-    data: &[u8],
-    input: &[f32],
-    output: &mut [f32],
-    rows: usize,
-    cols: usize,
-) {
+fn q4_0_matvec_dispatch(data: &[u8], input: &[f32], output: &mut [f32], rows: usize, cols: usize) {
     match best_int_kernel() {
         #[cfg(target_arch = "aarch64")]
         KernelTier::I8mm => unsafe { i8mm::q4_0_matvec(data, input, output, rows, cols) },

@@ -90,8 +90,9 @@ All notable changes to TensorDB are documented in this file.
 - **Token sampler** (`src/ai/sampler.rs`) — greedy (argmax), top-p nucleus sampling, temperature scaling, repetition penalty
 - **SQL grammar decoder** (`src/ai/sql_grammar.rs`) — soft-constraint token filtering that biases generation toward valid SQL
 - **Schema cache** (`src/ai/schema_cache.rs`) — TTL-based schema context caching with DDL invalidation
-- **KV cache prefix reuse** — schema prompt KV state cached and reused across calls for ~3-15x speedup on repeated queries
-- `llm_context_size`, `llm_schema_cache_ttl_secs`, `llm_grammar_constrained`, `llm_kv_cache_prefix` config fields
+- **Table-filtered schema context** — Schema context automatically pruned to relevant tables for optimal small-model performance
+- **Rayon-parallelized matvec** — All matrix-vector multiplies distribute rows across cores for multi-core speedup
+- `llm_context_size`, `llm_schema_cache_ttl_secs`, `llm_grammar_constrained` config fields
 
 ### Changed
 - All crate versions bumped to 0.2.0
