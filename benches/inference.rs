@@ -227,6 +227,7 @@ fn bench_scratch_alloc(c: &mut Criterion) {
         rms_norm_eps: 1e-6,
         head_dim: HEAD_DIM,
         context_length: CONTEXT_LENGTH,
+        rope_scale: 1.0,
         rope_freqs: (0..HEAD_DIM / 2)
             .map(|i| 1.0 / 1_000_000.0f32.powf((2 * i) as f32 / HEAD_DIM as f32))
             .collect(),
@@ -364,6 +365,78 @@ fn bench_per_token_cost(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark 8: Kernel dispatch -- compares dispatched (best available) vs scalar baseline.
+fn bench_kernel_dispatch(c: &mut Criterion) {
+    let mut group = c.benchmark_group("kernel_dispatch");
+    group.sample_size(50);
+
+    // Report detected features
+    let features = tensordb_core::ai::kernels::cpu_features();
+    let tier = tensordb_core::ai::kernels::best_int_kernel();
+    eprintln!("CPU features: {features:?}");
+    eprintln!("Best int kernel tier: {tier}");
+
+    // prem-1B-SQL hidden_dim = 2048
+    let mat = make_q8_0_weight(2048, 2048);
+    let input = make_input(2048);
+    let mut output = vec![0.0f32; 2048];
+
+    group.throughput(Throughput::Elements(2048 * 2048));
+
+    group.bench_function("dispatched_best", |b| {
+        b.iter(|| {
+            mat.matvec(black_box(&input), black_box(&mut output));
+        });
+    });
+
+    group.finish();
+}
+
+/// Benchmark 9: Fused RMSNorm->Matvec vs separate.
+fn bench_fused_rmsnorm(c: &mut Criterion) {
+    let mut group = c.benchmark_group("fused_rmsnorm");
+    group.sample_size(50);
+
+    let mat = make_q8_0_weight(2048, 2048);
+    let input = make_input(2048);
+    let norm_weight = vec![1.0f32; 2048];
+    let eps = 1e-6f32;
+
+    // Separate path: RMSNorm then matvec
+    group.bench_function("separate_rmsnorm_plus_matvec", |b| {
+        let mut normed = vec![0.0f32; 2048];
+        let mut output = vec![0.0f32; 2048];
+        b.iter(|| {
+            tensordb_core::ai::kernels::rms_norm(
+                black_box(&input),
+                black_box(&norm_weight),
+                eps,
+                black_box(&mut normed),
+            );
+            mat.matvec(black_box(&normed), black_box(&mut output));
+        });
+    });
+
+    // Fused path: RMSNorm + matvec in a single pass
+    group.bench_function("fused_rmsnorm_matvec", |b| {
+        let mut output = vec![0.0f32; 2048];
+        let weight_data = mat.data();
+        b.iter(|| {
+            tensordb_core::ai::kernels::fused_rmsnorm_q8_0_matvec(
+                black_box(&input),
+                black_box(&norm_weight),
+                eps,
+                black_box(weight_data),
+                black_box(&mut output),
+                2048,
+                2048,
+            );
+        });
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_lm_head,
@@ -373,5 +446,7 @@ criterion_group!(
     bench_active_vocab_scatter,
     bench_q8_0_matvec,
     bench_per_token_cost,
+    bench_kernel_dispatch,
+    bench_fused_rmsnorm,
 );
 criterion_main!(benches);
