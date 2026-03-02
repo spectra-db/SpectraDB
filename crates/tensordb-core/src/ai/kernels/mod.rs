@@ -16,6 +16,12 @@ pub mod neon;
 #[cfg(target_arch = "x86_64")]
 pub mod avx2;
 
+#[cfg(target_arch = "x86_64")]
+pub mod avx512;
+
+#[cfg(target_arch = "aarch64")]
+pub mod i8mm;
+
 #[cfg(feature = "llm")]
 use rayon::prelude::*;
 
@@ -250,8 +256,14 @@ fn q8_0_matvec_dispatch(
 ) {
     match best_int_kernel() {
         #[cfg(target_arch = "aarch64")]
-        KernelTier::Neon | KernelTier::NeonDotprod | KernelTier::I8mm => unsafe {
+        KernelTier::I8mm => unsafe { i8mm::q8_0_matvec(data, input, output, rows, cols) },
+        #[cfg(target_arch = "aarch64")]
+        KernelTier::Neon | KernelTier::NeonDotprod => unsafe {
             neon::q8_0_matvec(data, input, output, rows, cols)
+        },
+        #[cfg(target_arch = "x86_64")]
+        KernelTier::Avx512Vnni | KernelTier::Avx512 => unsafe {
+            avx512::q8_0_matvec(data, input, output, rows, cols)
         },
         #[cfg(target_arch = "x86_64")]
         KernelTier::Avx2 => unsafe { avx2::q8_0_matvec(data, input, output, rows, cols) },
@@ -268,8 +280,14 @@ fn q4_0_matvec_dispatch(
 ) {
     match best_int_kernel() {
         #[cfg(target_arch = "aarch64")]
-        KernelTier::Neon | KernelTier::NeonDotprod | KernelTier::I8mm => unsafe {
+        KernelTier::I8mm => unsafe { i8mm::q4_0_matvec(data, input, output, rows, cols) },
+        #[cfg(target_arch = "aarch64")]
+        KernelTier::Neon | KernelTier::NeonDotprod => unsafe {
             neon::q4_0_matvec(data, input, output, rows, cols)
+        },
+        #[cfg(target_arch = "x86_64")]
+        KernelTier::Avx512Vnni | KernelTier::Avx512 => unsafe {
+            avx512::q4_0_matvec(data, input, output, rows, cols)
         },
         #[cfg(target_arch = "x86_64")]
         KernelTier::Avx2 => unsafe { avx2::q4_0_matvec(data, input, output, rows, cols) },
@@ -282,6 +300,8 @@ fn rms_norm_dispatch(x: &[f32], weight: &[f32], eps: f32, output: &mut [f32]) {
         #[cfg(target_arch = "aarch64")]
         KernelTier::Neon => unsafe { neon::rms_norm(x, weight, eps, output) },
         #[cfg(target_arch = "x86_64")]
+        KernelTier::Avx512 => unsafe { avx512::rms_norm(x, weight, eps, output) },
+        #[cfg(target_arch = "x86_64")]
         KernelTier::Avx2 => unsafe { avx2::rms_norm(x, weight, eps, output) },
         _ => scalar::rms_norm(x, weight, eps, output),
     }
@@ -291,6 +311,8 @@ fn silu_inplace_dispatch(x: &mut [f32]) {
     match best_float_kernel() {
         #[cfg(target_arch = "aarch64")]
         KernelTier::Neon => unsafe { neon::silu_inplace(x) },
+        #[cfg(target_arch = "x86_64")]
+        KernelTier::Avx512 => unsafe { avx512::silu_inplace(x) },
         #[cfg(target_arch = "x86_64")]
         KernelTier::Avx2 => unsafe { avx2::silu_inplace(x) },
         _ => scalar::silu_inplace(x),
