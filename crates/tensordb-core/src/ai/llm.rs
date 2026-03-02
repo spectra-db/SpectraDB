@@ -33,14 +33,27 @@ const MODEL_FILENAME: &str = "Qwen3-0.6B-Q8_0.gguf";
 const MODEL_URL: &str =
     "https://github.com/tensor-db/TensorDB/releases/download/v0.2.0-model/Qwen3-0.6B-Q8_0.gguf";
 
-const SYSTEM_PROMPT: &str = "You are a SQL translator for TensorDB (a bitemporal database). \
-TensorDB SQL supports: SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, \
-SHOW TABLES, DESCRIBE <table>, time-travel (AS OF <timestamp>), \
-aggregates (count, sum, avg, min, max), JOINs, CTEs, window functions. \
-IMPORTANT: TensorDB does NOT have information_schema or pg_catalog. \
-To list tables use SHOW TABLES. To describe a table use DESCRIBE <table>. \
-Table names are plain identifiers — never use schema-qualified names like schema.table. \
-Output ONLY a single SQL statement, nothing else — no explanation, no markdown. /no_think";
+const SYSTEM_PROMPT: &str = "\
+You are a SQL translator for TensorDB, a bitemporal ledger database. \
+Generate a single SQL statement. No explanations, no markdown.\n\
+\n\
+Supported SQL: SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, DROP TABLE, \
+SHOW TABLES, DESCRIBE <table>, JOINs (INNER/LEFT/RIGHT/CROSS), \
+CTEs (WITH), window functions (ROW_NUMBER, RANK, DENSE_RANK, LEAD, LAG), \
+CASE/WHEN, subqueries, UNION/INTERSECT/EXCEPT, CAST, LIKE, IN, BETWEEN, IS NULL, \
+GROUP BY, HAVING, ORDER BY, LIMIT, OFFSET, DISTINCT.\n\
+Aggregates: COUNT, SUM, AVG, MIN, MAX, STRING_AGG.\n\
+\n\
+TensorDB extensions:\n\
+- Time travel: SELECT * FROM t AS OF <commit_ts>\n\
+- Epoch snapshot: SELECT * FROM t AS OF EPOCH <n>\n\
+- Bitemporal: FOR SYSTEM_TIME AS OF <ts>, FOR APPLICATION_TIME AS OF <ts>\n\
+- Time-series: TIME_BUCKET('1h', ts), DELTA(), RATE()\n\
+- Full-text: CREATE FULLTEXT INDEX, MATCH(col, 'query'), HIGHLIGHT(col, 'query')\n\
+- Vector: embedding <-> '[0.1, ...]' distance, COSINE_SIMILARITY(), vector_search()\n\
+\n\
+Rules: No information_schema. No pg_catalog. No schema-qualified names. \
+Use SHOW TABLES to list tables. Use DESCRIBE <table> for columns. /no_think";
 
 struct LoadedModel {
     model: TransformerModel,
@@ -49,6 +62,9 @@ struct LoadedModel {
     config: ModelConfig,
     scratch: ScratchBuffers,
     active_vocab: ActiveVocab,
+    speculator: Option<super::speculation::SqlSpeculator>,
+    /// Hash of the schema text used to build the current speculator.
+    speculator_schema_hash: u64,
 }
 
 pub struct LlmEngine {
@@ -157,6 +173,8 @@ impl LlmEngine {
             config,
             scratch,
             active_vocab,
+            speculator: None,
+            speculator_schema_hash: 0,
         });
         self.loaded.store(true, Ordering::Release);
         Ok(())
@@ -303,6 +321,23 @@ impl LlmEngine {
         let mut guard = self.inner.lock();
         let loaded = guard.as_mut().ok_or(TensorError::LlmNotAvailable)?;
 
+        // Build or update the SQL speculator when schema changes
+        if !schema_context.is_empty() {
+            let schema_hash = simple_hash(schema_context.as_bytes());
+            if loaded.speculator.is_none() || loaded.speculator_schema_hash != schema_hash {
+                let (table_names, column_names) =
+                    parse_schema_for_speculation(schema_context);
+                if !table_names.is_empty() {
+                    loaded.speculator = Some(super::speculation::SqlSpeculator::new(
+                        &loaded.tokenizer,
+                        &table_names,
+                        &column_names,
+                    ));
+                    loaded.speculator_schema_hash = schema_hash;
+                }
+            }
+        }
+
         // Build ChatML prompt
         let user_content = if schema_context.is_empty() {
             format!("Question: {question}")
@@ -443,7 +478,8 @@ impl LlmEngine {
         Ok(sql)
     }
 
-    /// Generate SQL tokens from logits, using active-vocab pruning and sampling.
+    /// Generate SQL tokens from logits, using active-vocab pruning, sampling,
+    /// and optional speculative decoding via SQL template matching.
     fn generate_sql_from_logits(
         &self,
         loaded: &mut LoadedModel,
@@ -456,7 +492,8 @@ impl LlmEngine {
         let mut output_tokens: Vec<u32> = Vec::new();
         let mut pos = start_pos;
 
-        for _ in 0..self.max_tokens {
+        let mut step = 0;
+        while step < self.max_tokens {
             let token = sampler.sample(&mut logits, &output_tokens);
 
             if loaded.tokenizer.is_eos(token) {
@@ -464,6 +501,7 @@ impl LlmEngine {
             }
 
             output_tokens.push(token);
+            step += 1;
 
             // Early stop: semicolon followed by newline
             let piece = loaded.tokenizer.decode(&[token]);
@@ -478,8 +516,59 @@ impl LlmEngine {
                 break;
             }
 
-            // Forward pass with active vocab — non-active tokens are NEG_INFINITY,
-            // so grammar.apply() is unnecessary.
+            // Try speculative decoding using SQL template matching
+            if let Some(ref speculator) = loaded.speculator {
+                let ctx =
+                    super::speculation::detect_sql_context(&loaded.tokenizer, &output_tokens);
+                if let Some(draft) = speculator.draft(&output_tokens, ctx) {
+                    if !draft.draft_tokens.is_empty() && draft.match_confidence > 0.3 {
+                        // Build batch: current token + draft tokens
+                        let mut batch = vec![token];
+                        batch.extend_from_slice(&draft.draft_tokens);
+
+                        // Ensure we don't exceed context window
+                        let remaining_ctx = ctx_size.saturating_sub(pos + 1);
+                        if batch.len() > remaining_ctx {
+                            batch.truncate(remaining_ctx.max(1));
+                        }
+
+                        if batch.len() > 1 {
+                            // Batched forward pass — processes all tokens,
+                            // returns logits for the LAST token only.
+                            let batch_logits = loaded.model.forward_batch_active_vocab(
+                                &batch,
+                                pos,
+                                kv_cache,
+                                &mut loaded.scratch,
+                                &mut loaded.active_vocab,
+                            );
+                            logits.copy_from_slice(batch_logits);
+
+                            // Accept draft tokens optimistically
+                            let mut accepted = 0;
+                            for &dt in &draft.draft_tokens {
+                                if loaded.tokenizer.is_eos(dt) {
+                                    break;
+                                }
+                                let dt_piece = loaded.tokenizer.decode(&[dt]);
+                                output_tokens.push(dt);
+                                accepted += 1;
+                                step += 1;
+                                if dt_piece.contains(';') {
+                                    break;
+                                }
+                            }
+
+                            // Advance position by entire batch (current token + accepted drafts)
+                            pos += 1 + accepted;
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            // Standard single-token forward (fallback when speculation is unavailable
+            // or not confident enough).
             let active_logits = loaded.model.forward_active_vocab(
                 token,
                 pos,
@@ -507,6 +596,43 @@ impl LlmEngine {
     pub fn schema_cache(&self) -> &SchemaCache {
         &self.schema_cache
     }
+}
+
+/// Parse schema context text into table names and their column names.
+///
+/// Expected format (one entry per table):
+/// ```text
+/// Table: users
+///   id INTEGER
+///   name TEXT
+///   balance REAL
+/// Table: orders
+///   order_id INTEGER
+///   user_id INTEGER
+/// ```
+fn parse_schema_for_speculation(schema_text: &str) -> (Vec<String>, Vec<Vec<String>>) {
+    let mut table_names = Vec::new();
+    let mut column_names: Vec<Vec<String>> = Vec::new();
+
+    for line in schema_text.lines() {
+        let trimmed = line.trim();
+        if let Some(table_name) = trimmed.strip_prefix("Table: ") {
+            let name = table_name.trim().to_string();
+            if !name.is_empty() {
+                table_names.push(name);
+                column_names.push(Vec::new());
+            }
+        } else if !trimmed.is_empty() && !table_names.is_empty() {
+            // Column line: "  column_name TYPE"
+            if let Some(col_name) = trimmed.split_whitespace().next() {
+                if let Some(cols) = column_names.last_mut() {
+                    cols.push(col_name.to_string());
+                }
+            }
+        }
+    }
+
+    (table_names, column_names)
 }
 
 /// Simple non-cryptographic hash for schema text comparison.
@@ -698,5 +824,30 @@ mod tests {
         let h1 = simple_hash(b"schema_v1");
         let h2 = simple_hash(b"schema_v2");
         assert_ne!(h1, h2);
+    }
+
+    #[test]
+    fn parse_schema_single_table() {
+        let schema = "Table: users\n  id INTEGER\n  name TEXT\n  balance REAL\n";
+        let (tables, columns) = parse_schema_for_speculation(schema);
+        assert_eq!(tables, vec!["users"]);
+        assert_eq!(columns, vec![vec!["id", "name", "balance"]]);
+    }
+
+    #[test]
+    fn parse_schema_multiple_tables() {
+        let schema = "Table: users\n  id INTEGER\n  name TEXT\nTable: orders\n  order_id INTEGER\n  user_id INTEGER\n";
+        let (tables, columns) = parse_schema_for_speculation(schema);
+        assert_eq!(tables, vec!["users", "orders"]);
+        assert_eq!(columns.len(), 2);
+        assert_eq!(columns[0], vec!["id", "name"]);
+        assert_eq!(columns[1], vec!["order_id", "user_id"]);
+    }
+
+    #[test]
+    fn parse_schema_empty() {
+        let (tables, columns) = parse_schema_for_speculation("");
+        assert!(tables.is_empty());
+        assert!(columns.is_empty());
     }
 }
