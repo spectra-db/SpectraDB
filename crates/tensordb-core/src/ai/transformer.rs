@@ -147,6 +147,13 @@ impl WeightMatrix {
         }
     }
 
+    /// Returns a reference to the raw quantized weight data. Used for benchmarking
+    /// kernel dispatch vs fused paths that operate on raw bytes directly.
+    #[doc(hidden)]
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+
     fn from_gguf(gguf: &GgufFile, name: &str) -> Result<Self> {
         let info = gguf
             .tensor_info(name)
