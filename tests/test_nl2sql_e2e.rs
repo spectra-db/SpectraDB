@@ -6,12 +6,14 @@ mod tests {
     use tensordb_core::config::Config;
     use tensordb_core::engine::db::Database;
 
-    fn setup_db() -> (Database, tempfile::TempDir) {
+    fn setup_db() -> Option<(Database, tempfile::TempDir)> {
         let home = std::env::var("HOME").unwrap_or_default();
         let model = std::env::var("LLM_MODEL_PATH")
             .unwrap_or_else(|_| format!("{home}/.tensordb/models/Qwen3-0.6B-Q8_0.gguf"));
         if !std::path::Path::new(&model).exists() {
-            panic!("Model not found at {model}");
+            eprintln!("Skipping NL2SQL test: model not found at {model}");
+            eprintln!("Set LLM_MODEL_PATH to run this test");
+            return None;
         }
 
         let dir = tempfile::tempdir().unwrap();
@@ -61,7 +63,7 @@ mod tests {
         db.sql("INSERT INTO reviews (id, product_id, customer_id, rating, comment) VALUES (4, 4, 3, 5, 'Great monitor');").unwrap();
         db.sql("INSERT INTO reviews (id, product_id, customer_id, rating, comment) VALUES (5, 5, 3, 4, 'Nice keyboard');").unwrap();
 
-        (db, dir)
+        Some((db, dir))
     }
 
     struct TestCase {
@@ -75,7 +77,9 @@ mod tests {
 
     #[test]
     fn nl2sql_medium_to_hard() {
-        let (db, _dir) = setup_db();
+        let Some((db, _dir)) = setup_db() else {
+            return;
+        };
 
         let cases = vec![
             // --- EASY (warm up) ---
