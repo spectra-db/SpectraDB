@@ -32,7 +32,7 @@ docs/.astro/
 # Node.js
 **/node_modules/
 
-# Claude Code
+# IDE / tool config
 .claude/
 
 # Compiled native modules

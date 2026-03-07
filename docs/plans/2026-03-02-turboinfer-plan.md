@@ -1,7 +1,5 @@
 # TurboInfer Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Make TensorDB's embedded NL2SQL inference engine faster than llama.cpp on CPU, targeting sub-3s first query and sub-1s repeat queries for prem-1B-SQL.
 
 **Architecture:** Three-layer optimization: (1) Runtime-detected SIMD kernel dispatch engine replacing compile-time `#[cfg(feature = "simd")]` guards, with I8MM/VNNI/AVX-512 kernels; (2) NL2SQL-specific fused operations (RMSNorm→Matvec, batched QKV); (3) SQL template speculative decoding.
