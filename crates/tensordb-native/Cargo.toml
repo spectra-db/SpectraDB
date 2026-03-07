@@ -2,6 +2,9 @@
 name = "tensordb-native"
 version = "0.3.0"
 edition = "2021"
+description = "Optional C++ acceleration kernels for TensorDB"
+license = "PolyForm-Noncommercial-1.0.0"
+repository = "https://github.com/tensor-db/tensorDB"
 
 [dependencies]
 cxx = "1"
